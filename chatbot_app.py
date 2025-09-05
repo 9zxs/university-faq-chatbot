@@ -157,7 +157,7 @@ def bot_reply(user_text):
     log_interaction(user_text, detected_lang, translated_input, tag, reply, confidence)
     # Clear input after submit
     st.session_state.input = ""
-    
+
 # =============================
 # Feedback
 # =============================
@@ -245,15 +245,47 @@ with st.sidebar:
         st.session_state.conversation_context = []
 
 # =============================
+# Theme-aware chat CSS
+# =============================
+st.markdown("""
+<style>
+.user-bubble, .bot-bubble {
+    padding: 10px;
+    border-radius: 10px;
+    margin: 5px;
+    max-width: 70%;
+    word-wrap: break-word;
+}
+
+/* Light theme */
+@media (prefers-color-scheme: light) {
+    .user-bubble { background-color: #DCF8C6; color: #000; align-self: flex-end; }
+    .bot-bubble { background-color: #F1F0F0; color: #000; align-self: flex-start; }
+}
+
+/* Dark theme */
+@media (prefers-color-scheme: dark) {
+    .user-bubble { background-color: #4A8B4E; color: #fff; align-self: flex-end; }
+    .bot-bubble { background-color: #3A3A3A; color: #fff; align-self: flex-start; }
+}
+
+.chat-container {
+    display: flex;
+    flex-direction: column;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# =============================
 # Chat and Analytics Tabs
 # =============================
 tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
 with tab1:
     # Chat display
-    st.markdown('<div style="display:flex; flex-direction:column;">', unsafe_allow_html=True)
+    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
     for speaker, msg in st.session_state.history:
-        color = "#DCF8C6" if speaker=="You" else "#F1F0F0"
-        st.markdown(f'<div style="background:{color}; padding:10px; border-radius:10px; margin:5px;">{speaker}: {msg}</div>', unsafe_allow_html=True)
+        bubble_class = "user-bubble" if speaker == "You" else "bot-bubble"
+        st.markdown(f'<div class="{bubble_class}">{speaker}: {msg}</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Input box with immediate response
