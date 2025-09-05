@@ -366,9 +366,12 @@ with tab1:
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Input box pinned at bottom
-    if user_input := st.chat_input("Ask me anything about the university..."):
+    user_input = st.chat_input("Ask me anything about the university...")
+    if user_input:
         bot_reply(user_input)
         st.experimental_rerun()
+        
+    st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 with tab2:
