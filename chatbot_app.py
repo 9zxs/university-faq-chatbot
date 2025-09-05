@@ -218,7 +218,7 @@ with col1:
         st.image(str(logo_path), width=80)
 with col2:
     st.title("🎓 University FAQ Chatbot")
-    st.caption("Multilingual support: English • Malay • 中文")
+    st.caption("Multilingual support: English • 中文")
 
 with st.sidebar:
     st.subheader("ℹ️ Info")
