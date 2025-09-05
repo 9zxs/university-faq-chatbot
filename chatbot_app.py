@@ -19,9 +19,9 @@ FEEDBACK_PATH = BASE_DIR / "data" / "feedback.json"
 # Supported languages
 # =============================
 SUPPORTED_LANGS = {
-    "en": "en",       # English
-    "ms": "ms",       # Malay
-    "zh-cn": "zh-CN"  # Chinese (Simplified)
+    "en": "en",        # English
+    "ms": "ms",        # Malay
+    "zh-cn": "zh-CN"   # Chinese (Simplified)
 }
 
 # =============================
@@ -88,7 +88,12 @@ def bot_reply(user_text):
     translated_input = user_text
     try:
         lang = detect(user_text)
-        detected_lang = SUPPORTED_LANGS.get(lang, "en")  # fallback to English
+        if lang.startswith("ms"):
+            detected_lang = "ms"
+        elif lang.startswith("zh"):
+            detected_lang = "zh-CN"
+        else:
+            detected_lang = "en"
     except:
         detected_lang = "en"
 
@@ -108,7 +113,7 @@ def bot_reply(user_text):
         confidence = 0.1
 
     # Get response in English
-    reply_en = get_contextual_response(tag, user_text, st.session_state.conversation_context)
+    reply_en = get_contextual_response(tag, translated_input, st.session_state.conversation_context)
     reply = reply_en
 
     # Translate reply back if not English
@@ -262,7 +267,7 @@ with tab1:
         chat_html += f'<div class="{bubble_class}">{speaker}: {msg}</div>'
     chat_html += '</div>'
 
-    # Add JS for auto-scroll
+    # Auto-scroll JS
     chat_html += """
         <script>
             var chatBox = document.getElementById('chat-box');
