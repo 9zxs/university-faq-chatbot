@@ -27,7 +27,7 @@ def log_interaction(user_text, detected_lang, translated_input, predicted_tag, b
         else:
             logs = []
 
-        logs.append({
+        log_entry = {
             "timestamp": datetime.datetime.now().isoformat(),
             "user_text": user_text,
             "detected_lang": detected_lang,
@@ -37,7 +37,9 @@ def log_interaction(user_text, detected_lang, translated_input, predicted_tag, b
             "confidence": confidence,
             "session_id": st.session_state.get("session_id", "unknown"),
             "feedback": feedback
-        })
+        }
+
+        logs.append(log_entry)
 
         with open(LOG_PATH, "w", encoding="utf-8") as f:
             json.dump(logs, f, indent=2, ensure_ascii=False)
@@ -45,14 +47,20 @@ def log_interaction(user_text, detected_lang, translated_input, predicted_tag, b
         st.warning(f"⚠️ Could not save log: {e}")
 
 # =============================
-# Load model and responses
+# Model loading
 # =============================
 @st.cache_resource
 def load_model_and_data():
     clf = joblib.load(MODEL_PATH)
+
     with open(DATA_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
-    responses = {intent.get("tag") or intent.get("intent"): intent.get("responses", []) for intent in data["intents"]}
+
+    responses = {}
+    for intent in data["intents"]:
+        tag = intent.get("tag") or intent.get("intent")
+        responses[tag] = intent.get("responses", [])
+
     return clf, responses
 
 clf, responses = load_model_and_data()
@@ -67,8 +75,6 @@ def init_session():
         st.session_state.history = []
     if "conversation_context" not in st.session_state:
         st.session_state.conversation_context = []
-
-init_session()
 
 # =============================
 # Language detection
@@ -92,10 +98,14 @@ def detect_supported_lang(text):
     try:
         detected = detect(text)
         confidence = 0.8
-        if detected in ["en"]: return "en", confidence
-        elif detected in ["ms", "id"]: return "ms", confidence
-        elif detected in ["zh", "zh-cn", "zh-tw"]: return "zh-CN", confidence
-        else: return "en", 0.5
+        if detected in ["en"]:
+            return "en", confidence
+        elif detected in ["ms", "id"]:
+            return "ms", confidence
+        elif detected in ["zh", "zh-cn", "zh-tw"]:
+            return "zh-CN", confidence
+        else:
+            return "en", 0.5
     except:
         return "en", 0.3
 
@@ -104,44 +114,58 @@ def detect_supported_lang(text):
 # =============================
 def get_contextual_response(tag, user_text, conversation_history):
     base_responses = responses.get(tag, responses.get("fallback", ["Sorry, I didn't understand that."]))
+
     if tag == "greeting" and len(conversation_history) > 2:
         base_responses = ["Welcome back! How can I help you today?", "Hello again! What would you like to know?"]
+
     follow_ups = {
         "admissions_requirements": "\n\n💡 You might also want to ask about tuition fees or scholarship opportunities.",
         "tuition_fees": "\n\n💡 Don't forget to check our scholarship programs!",
         "scholarship": "\n\n💡 Would you like to know about the application deadlines?",
         "exam_schedule": "\n\n💡 Need help with library hours for studying?",
     }
+
     response = random.choice(base_responses)
     if tag in follow_ups:
         response += follow_ups[tag]
+
     return response
 
 # =============================
-# Bot reply (immediate)
+# Bot reply
 # =============================
 def bot_reply(user_text):
     detected_lang, lang_confidence = detect_supported_lang(user_text)
-    translated_input = user_text
+
     if detected_lang != "en":
         try:
             translated_input = GoogleTranslator(source="auto", target="en").translate(user_text)
         except:
             translated_input = user_text
+    else:
+        translated_input = user_text
+
     try:
         tag = clf.predict([translated_input.lower()])[0]
-        confidence = 0.7
-    except:
+        if hasattr(clf, "decision_function"):
+            confidence_scores = clf.decision_function([translated_input.lower()])[0]
+            confidence = max(confidence_scores) if len(confidence_scores) > 1 else confidence_scores[0]
+            confidence = 1 / (1 + abs(confidence))
+        else:
+            confidence = 0.7
+    except Exception:
         tag = "fallback"
         confidence = 0.1
 
     reply_en = get_contextual_response(tag, user_text, st.session_state.conversation_context)
-    reply = reply_en
+
     if detected_lang != "en":
         try:
             reply = GoogleTranslator(source="en", target=detected_lang).translate(reply_en)
         except:
             reply = reply_en
+    else:
+        reply = reply_en
 
     st.session_state.conversation_context.append({
         "user": user_text,
@@ -154,28 +178,34 @@ def bot_reply(user_text):
 
     st.session_state.history.append(("You", user_text))
     st.session_state.history.append(("Bot", reply))
+
     log_interaction(user_text, detected_lang, translated_input, tag, reply, confidence)
-    # Clear input after submit
-    st.session_state.input = ""
-    
+    return reply  # return the reply string
+
 # =============================
 # Feedback
 # =============================
 def save_feedback(rating, comment=""):
     try:
-        feedback_data = []
         if FEEDBACK_PATH.exists():
             with open(FEEDBACK_PATH, "r", encoding="utf-8") as f:
                 feedback_data = json.load(f)
-        feedback_data.append({
+        else:
+            feedback_data = []
+
+        feedback_entry = {
             "timestamp": datetime.datetime.now().isoformat(),
             "session_id": st.session_state.session_id,
             "rating": rating,
             "comment": comment,
             "conversation_length": len(st.session_state.history)
-        })
+        }
+
+        feedback_data.append(feedback_entry)
+
         with open(FEEDBACK_PATH, "w", encoding="utf-8") as f:
             json.dump(feedback_data, f, indent=2)
+
         st.success("Thank you for your feedback! 🙏")
     except Exception as e:
         st.error(f"Error saving feedback: {e}")
@@ -221,11 +251,14 @@ def show_analytics():
         st.error(f"Error loading analytics: {e}")
 
 # =============================
-# App UI
+# Main App
 # =============================
 st.set_page_config(page_title="🎓 University FAQ Chatbot", page_icon="🤖", layout="wide")
+init_session()
+
+# Header
 logo_path = Path(__file__).resolve().parent / "data" / "university_logo.png"
-col1, col2 = st.columns([1,4])
+col1, col2 = st.columns([1, 4])
 with col1:
     if logo_path.exists():
         st.image(str(logo_path), width=80)
@@ -235,29 +268,82 @@ with col2:
 
 # Sidebar
 with st.sidebar:
-    st.subheader("ℹ️ Info")
-    st.info("This AI chatbot helps answer questions about:\n• Admissions\n• Tuition & Scholarships\n• Exams\n• Library\n• Housing\n• Office Hours")
-    st.subheader("Session")
-    st.text(f"Session ID: {st.session_state.session_id}")
-    st.text(f"Messages: {len(st.session_state.history)}")
-    if st.button("🗑️ Clear Chat"):
-        st.session_state.history = []
-        st.session_state.conversation_context = []
+    with st.expander("ℹ️ Info", expanded=True):
+        st.info(
+            "This AI chatbot helps answer questions about:\n\n"
+            "• 📚 Admissions & Requirements\n"
+            "• 💰 Tuition Fees & Scholarships\n"
+            "• 📅 Exam Schedules\n"
+            "• 📖 Library Services\n"
+            "• 🏠 Housing & Hostels\n"
+            "• ⏰ Office Hours"
+        )
+    with st.expander("🔧 Session Info", expanded=True):
+        st.text(f"Session ID: {st.session_state.session_id}")
+        st.text(f"Messages: {len(st.session_state.history)}")
+        if st.button("🗑️ Clear Chat"):
+            st.session_state.history = []
+            st.session_state.conversation_context = []
+            st.experimental_rerun()
 
-# =============================
-# Chat and Analytics Tabs
-# =============================
 tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
+
 with tab1:
-    # Chat display
-    st.markdown('<div style="display:flex; flex-direction:column;">', unsafe_allow_html=True)
+    st.subheader("🔍 Quick Questions")
+    col1, col2, col3, col4 = st.columns(4)
+    quick_buttons = [
+        ("📚 Admission", "what are the admission requirements"),
+        ("💰 Tuition", "how much is the tuition fee"),
+        ("📅 Exam Dates", "when are the exams"),
+        ("🏠 Housing", "how can I apply for hostels")
+    ]
+    for col, (label, query) in zip([col1, col2, col3, col4], quick_buttons):
+        if col.button(label, use_container_width=True):
+            bot_reply(query)
+
+    # Chat CSS
+    st.markdown("""
+    <style>
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        overflow-y: auto;
+        max-height: 500px;
+        padding: 10px;
+    }
+    .chat-user, .chat-bot {
+        padding: 10px 15px;
+        border-radius: 15px;
+        max-width: 70%;
+        word-wrap: break-word;
+        display: inline-block;
+    }
+    .chat-user { align-self: flex-end; background-color: #DCF8C6; }
+    .chat-bot { align-self: flex-start; background-color: #F1F0F0; }
+    @media (prefers-color-scheme: dark) {
+        .chat-user { background-color: #3A523A; color: white; }
+        .chat-bot { background-color: #2E2E2E; color: white; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Display chat
+    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
     for speaker, msg in st.session_state.history:
-        color = "#DCF8C6" if speaker=="You" else "#F1F0F0"
-        st.markdown(f'<div style="background:{color}; padding:10px; border-radius:10px; margin:5px;">{speaker}: {msg}</div>', unsafe_allow_html=True)
+        width_pct = min(max(len(msg)*1.5, 20), 70)
+        if speaker == "You":
+            st.markdown(f'<div class="chat-user" style="width:{width_pct}%;">{speaker}: {msg}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="chat-bot" style="width:{width_pct}%;">{speaker}: {msg}</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Input box with immediate response
-    st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
+    # Input for immediate response
+    user_input = st.text_input("Ask me anything about the university...", key="input")
+    if user_input:
+        reply = bot_reply(user_input)
+        st.session_state.input = ""  # clear input
+        st.experimental_rerun()  # refresh chat immediately
 
 with tab2:
     show_analytics()
