@@ -243,7 +243,63 @@ with st.sidebar:
     if st.button("🗑️ Clear Chat"):
         st.session_state.history = []
         st.session_state.conversation_context = []
+        
+st.markdown("""
+    <style>
+        .chat-container {
+            max-height: 400px;
+            overflow-y: auto;
+            display: flex;
+        }
 
+        .chat_input{
+            max-height: 400px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column-reverse; /* this puts new messages at the bottom, above input */
+        }
+        
+        /* User messages (right side) */
+        .chat-user {
+            background-color: #DCF8C6;
+            float: right;
+            clear: both;
+            text-align: right;
+            display: inline-block;
+            padding: 10px 15px;
+            border-radius: 15px;
+            margin: 5px;
+            font-size: 16px;
+            word-wrap: break-word;
+            max-width: 70%;
+            min-width: 50px;
+            color: var(--text-color);
+        }
+        
+        /* Bot messages (left side) */
+        .chat-bot {
+            background-color: #F1F0F0;
+            float: left;
+            clear: both;
+            text-align: left;
+            display: inline-block;
+            padding: 10px 15px;
+            border-radius: 15px;
+            margin: 5px;
+            font-size: 16px;
+            word-wrap: break-word;
+            max-width: 70%;
+            min-width: 50px;
+            color: var(--text-color);
+        }
+        
+        /* Dark mode adjustments */
+        @media (prefers-color-scheme: dark) {
+            .chat-bot { background-color: #2E2E2E; }
+            .chat-user { background-color: #3A523A; }
+        }
+    </style>
+    """, unsafe_allow_html=True)
 # =============================
 # Chat and Analytics Tabs
 # =============================
