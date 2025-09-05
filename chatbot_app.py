@@ -225,6 +225,16 @@ with st.sidebar:
 # CSS styling
 st.markdown("""
     <style>
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 500px;          /* Fixed height */
+            overflow-y: auto;       /* Enable vertical scroll */
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 10px;
+            background-color: #fafafa;
+        }
         .user-bubble, .bot-bubble {
             padding: 10px;
             border-radius: 10px;
@@ -232,22 +242,15 @@ st.markdown("""
             max-width: 70%;
             word-wrap: break-word;
         }
-        
         /* Light theme */
         @media (prefers-color-scheme: light) {
             .user-bubble { background-color: #DCF8C6; color: #000; align-self: flex-end; }
             .bot-bubble { background-color: #F1F0F0; color: #000; align-self: flex-start; }
         }
-        
         /* Dark theme */
         @media (prefers-color-scheme: dark) {
             .user-bubble { background-color: #4A8B4E; color: #fff; align-self: flex-end; }
             .bot-bubble { background-color: #3A3A3A; color: #fff; align-self: flex-start; }
-        }
-        
-        .chat-container {
-            display: flex;
-            flex-direction: column;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -260,6 +263,9 @@ with tab1:
         bubble_class = "user-bubble" if speaker == "You" else "bot-bubble"
         st.markdown(f'<div class="{bubble_class}">{speaker}: {msg}</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # Input box stays outside the scroll area
     st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
+
 with tab2:
     show_analytics()
