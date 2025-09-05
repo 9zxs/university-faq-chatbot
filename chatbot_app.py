@@ -348,15 +348,9 @@ with tab1:
         max-width: 70%;
         word-wrap: break-word;
     }
-    .chat-input {
-        padding: 5px 10px;
-        border-top: 1px solid #ccc;
-        background-color: #fff;
-    }
     @media (prefers-color-scheme: dark) {
         .chat-user { background-color: #3A523A; color: white; }
         .chat-bot { background-color: #2E2E2E; color: white; }
-        .chat-input { background-color: #1E1E1E; color: white; border-top: 1px solid #555; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -372,7 +366,6 @@ with tab1:
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Input box pinned at bottom
-    st.markdown('<div class="chat-input">', unsafe_allow_html=True)
     if user_input := st.chat_input("Ask me anything about the university..."):
         bot_reply(user_input)
     st.markdown('</div>', unsafe_allow_html=True)
