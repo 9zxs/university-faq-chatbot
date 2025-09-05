@@ -243,49 +243,21 @@ with st.sidebar:
     if st.button("🗑️ Clear Chat"):
         st.session_state.history = []
         st.session_state.conversation_context = []
-        
-# Add this CSS at the top (once)
-st.markdown("""
-<style>
-.user-bubble {
-    padding: 10px;
-    border-radius: 10px;
-    margin: 5px;
-    max-width: 70%;
-    word-wrap: break-word;
-    align-self: flex-end;
-    background-color: #DCF8C6;  /* Light theme default */
-    color: black;
-}
-.bot-bubble {
-    padding: 10px;
-    border-radius: 10px;
-    margin: 5px;
-    max-width: 70%;
-    word-wrap: break-word;
-    align-self: flex-start;
-    background-color: #F1F0F0;  /* Light theme default */
-    color: black;
-}
 
-/* Dark theme overrides */
-@media (prefers-color-scheme: dark) {
-    .user-bubble { background-color: #3A523A; color: white; }
-    .bot-bubble { background-color: #2E2E2E; color: white; }
-}
-</style>
-""", unsafe_allow_html=True)
+# =============================
+# Chat and Analytics Tabs
+# =============================
+tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
+with tab1:
+    # Chat display
+    st.markdown('<div style="display:flex; flex-direction:column;">', unsafe_allow_html=True)
+    for speaker, msg in st.session_state.history:
+        color = "#DCF8C6" if speaker=="You" else "#F1F0F0"
+        st.markdown(f'<div style="background:{color}; padding:10px; border-radius:10px; margin:5px;">{speaker}: {msg}</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Chat UI
-st.markdown('<div style="display:flex; flex-direction:column;">', unsafe_allow_html=True)
-for speaker, msg in st.session_state.history:
-    cls = "user-bubble" if speaker=="You" else "bot-bubble"
-    st.markdown(f'<div class="{cls}">{msg}</div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Immediate input
-if user_input := st.chat_input("Ask me anything..."):
-    bot_reply(user_input)
+    # Input box with immediate response
+    st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
 
 with tab2:
     show_analytics()
