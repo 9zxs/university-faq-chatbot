@@ -13,8 +13,16 @@ BASE_DIR = Path(__file__).resolve().parent
 INTENTS_PATH = BASE_DIR / "data" / "intents.json"
 MODEL_PATH = BASE_DIR / "model.joblib"
 LOG_PATH = BASE_DIR / "data" / "chat_logs.json"
-LANG_PATH = BASE_DIR / "data" / "lang_keywords.json"
 FEEDBACK_PATH = BASE_DIR / "data" / "feedback.json"
+
+# =============================
+# Supported languages
+# =============================
+SUPPORTED_LANGS = {
+    "en": "en",       # English
+    "ms": "ms",       # Malay
+    "zh-cn": "zh-CN"  # Chinese (Simplified)
+}
 
 # =============================
 # Load model and intents
@@ -28,14 +36,8 @@ def load_intents():
     with open(INTENTS_PATH, "r", encoding="utf-8") as f:
         return json.load(f)["intents"]
 
-@st.cache_resource
-def load_lang_keywords():
-    with open(LANG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
-
 clf = load_model()
 intents = load_intents()
-lang_keywords = load_lang_keywords()
 
 # =============================
 # Utils
@@ -85,14 +87,19 @@ def bot_reply(user_text):
     detected_lang = "en"
     translated_input = user_text
     try:
-        detected_lang = detect(user_text)
+        lang = detect(user_text)
+        detected_lang = SUPPORTED_LANGS.get(lang, "en")  # fallback to English
     except:
-        pass
+        detected_lang = "en"
+
+    # Translate to English if needed
     if detected_lang != "en":
         try:
             translated_input = GoogleTranslator(source=detected_lang, target="en").translate(user_text)
         except:
             translated_input = user_text
+
+    # Predict intent
     try:
         tag = clf.predict([translated_input.lower()])[0]
         confidence = 0.7
@@ -100,14 +107,18 @@ def bot_reply(user_text):
         tag = "fallback"
         confidence = 0.1
 
+    # Get response in English
     reply_en = get_contextual_response(tag, user_text, st.session_state.conversation_context)
     reply = reply_en
+
+    # Translate reply back if not English
     if detected_lang != "en":
         try:
             reply = GoogleTranslator(source="en", target=detected_lang).translate(reply_en)
         except:
             reply = reply_en
 
+    # Update context
     st.session_state.conversation_context.append({
         "user": user_text,
         "bot": reply,
@@ -117,6 +128,7 @@ def bot_reply(user_text):
     if len(st.session_state.conversation_context) > 5:
         st.session_state.conversation_context.pop(0)
 
+    # Save history
     st.session_state.history.append(("You", user_text))
     st.session_state.history.append(("Bot", reply))
     log_interaction(user_text, detected_lang, translated_input, tag, reply, confidence)
@@ -159,11 +171,13 @@ def show_analytics():
             st.warning("No conversation data available yet.")
             return
         df = pd.DataFrame(logs)
+
         col1, col2, col3, col4 = st.columns(4)
         with col1: st.metric("Total Conversations", len(df))
         with col2: st.metric("Unique Sessions", df['session_id'].nunique() if 'session_id' in df else "N/A")
         with col3: st.metric("Avg Confidence", f"{df['confidence'].mean():.2f}" if 'confidence' in df else "0")
         with col4: st.metric("Languages Used", df['detected_lang'].nunique() if 'detected_lang' in df else "N/A")
+
         col1, col2 = st.columns(2)
         with col1:
             if 'predicted_tag' in df:
@@ -176,6 +190,7 @@ def show_analytics():
                 lang_counts = df['detected_lang'].value_counts()
                 fig = px.pie(values=lang_counts.values, names=lang_counts.index, title="Language Usage")
                 st.plotly_chart(fig, use_container_width=True)
+
         st.subheader("Recent Conversations")
         recent_df = df.tail(10)[['timestamp', 'user_text', 'predicted_tag', 'confidence']].copy()
         if 'confidence' in recent_df:
