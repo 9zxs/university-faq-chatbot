@@ -38,7 +38,7 @@ def log_interaction(user_text, detected_lang, translated_input, predicted_tag, b
             "session_id": st.session_state.get("session_id", "unknown"),
             "feedback": feedback
         }
-        
+
         logs.append(log_entry)
 
         with open(LOG_PATH, "w", encoding="utf-8") as f:
@@ -52,15 +52,15 @@ def log_interaction(user_text, detected_lang, translated_input, predicted_tag, b
 @st.cache_resource
 def load_model_and_data():
     clf = joblib.load(MODEL_PATH)
-    
+
     with open(DATA_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
-    
+
     responses = {}
     for intent in data["intents"]:
         tag = intent.get("tag") or intent.get("intent")
         responses[tag] = intent.get("responses", [])
-    
+
     return clf, responses
 
 clf, responses = load_model_and_data()
@@ -71,13 +71,13 @@ clf, responses = load_model_and_data()
 def init_session():
     if "session_id" not in st.session_state:
         st.session_state.session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    
+
     if "history" not in st.session_state:
         st.session_state.history = []
-    
+
     if "user_satisfaction" not in st.session_state:
         st.session_state.user_satisfaction = []
-    
+
     if "conversation_context" not in st.session_state:
         st.session_state.conversation_context = []
 
@@ -90,16 +90,16 @@ def detect_supported_lang(text):
             lang_keywords = json.load(f)
     else:
         lang_keywords = {"ms": [], "zh-CN": []}
-    
+
     t = text.lower()
     ms_score = sum(1 for word in lang_keywords.get("ms", []) if word in t)
     zh_score = sum(1 for word in text if word in lang_keywords.get("zh-CN", []))
-    
+
     if ms_score > 0:
         return "ms", ms_score / len(text.split())
     if zh_score > 0:
         return "zh-CN", zh_score / len(text)
-    
+
     try:
         detected = detect(text)
         confidence = 0.8
@@ -119,21 +119,21 @@ def detect_supported_lang(text):
 # =============================
 def get_contextual_response(tag, user_text, conversation_history):
     base_responses = responses.get(tag, responses.get("fallback", ["Sorry, I didn't understand that."]))
-    
+
     if tag == "greeting" and len(conversation_history) > 2:
         base_responses = ["Welcome back! How can I help you today?", "Hello again! What would you like to know?"]
-    
+
     follow_ups = {
         "admissions_requirements": "\n\n💡 You might also want to ask about tuition fees or scholarship opportunities.",
         "tuition_fees": "\n\n💡 Don't forget to check our scholarship programs!",
         "scholarship": "\n\n💡 Would you like to know about the application deadlines?",
         "exam_schedule": "\n\n💡 Need help with library hours for studying?",
     }
-    
+
     response = random.choice(base_responses)
     if tag in follow_ups:
         response += follow_ups[tag]
-    
+
     return response
 
 # =============================
@@ -141,7 +141,7 @@ def get_contextual_response(tag, user_text, conversation_history):
 # =============================
 def bot_reply(user_text):
     detected_lang, lang_confidence = detect_supported_lang(user_text)
-    
+
     if detected_lang != "en":
         try:
             translated_input = GoogleTranslator(source="auto", target="en").translate(user_text)
@@ -197,7 +197,7 @@ def save_feedback(rating, comment=""):
                 feedback_data = json.load(f)
         else:
             feedback_data = []
-        
+
         feedback_entry = {
             "timestamp": datetime.datetime.now().isoformat(),
             "session_id": st.session_state.session_id,
@@ -205,12 +205,12 @@ def save_feedback(rating, comment=""):
             "comment": comment,
             "conversation_length": len(st.session_state.history)
         }
-        
+
         feedback_data.append(feedback_entry)
-        
+
         with open(FEEDBACK_PATH, "w", encoding="utf-8") as f:
             json.dump(feedback_data, f, indent=2)
-        
+
         st.success("Thank you for your feedback! 🙏")
     except Exception as e:
         st.error(f"Error saving feedback: {e}")
@@ -317,93 +317,75 @@ with tab1:
     for col, (label, query) in zip([col1, col2, col3, col4], quick_buttons):
         if col.button(label, use_container_width=True):
             bot_reply(query)
-    
-    if user_input := st.chat_input("Ask me anything about the university..."):
-        bot_reply(user_input)
 
+    # ==========================
+    # Chat UI
+    # ==========================
     st.markdown("""
     <style>
-        /* Chat container */
-        .chat-container {
-            max-height: 500px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            padding: 10px;
-            background-color: #f9f9f9;
-            border-radius: 10px;
-        }
-        
-        /* User messages (right) */
-        .chat-user {
-            align-self: flex-end;
-            background-color: #DCF8C6;
-            color: #000;
-            padding: 10px 15px;
-            border-radius: 20px 20px 0px 20px;
-            max-width: 70%;
-            word-wrap: break-word;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        
-        /* Bot messages (left) */
-        .chat-bot {
-            align-self: flex-start;
-            background-color: #F1F0F0;
-            color: #000;
-            padding: 10px 15px;
-            border-radius: 20px 20px 20px 0px;
-            max-width: 70%;
-            word-wrap: break-word;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        
-        /* Dark mode adjustments */
-        @media (prefers-color-scheme: dark) {
-            .chat-container { background-color: #1e1e1e; }
-            .chat-bot { background-color: #2E2E2E; color: #fff; }
-            .chat-user { background-color: #3A523A; color: #fff; }
-        }
-        
-        /* Scrollbar */
-        .chat-container::-webkit-scrollbar {
-            width: 6px;
-        }
-        .chat-container::-webkit-scrollbar-thumb {
-            background-color: rgba(0,0,0,0.2);
-            border-radius: 3px;
-        }
-        
-        /* Chat input (sticky) */
-        .chat-input-container {
-            position: sticky;
-            bottom: 0;
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        </style>
+    .chat-wrapper {
+        display: flex;
+        flex-direction: column;
+        height: 500px;
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .chat-container {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+    }
+    .chat-user {
+        background-color: #DCF8C6;
+        align-self: flex-end;
+        padding: 10px 15px;
+        border-radius: 15px;
+        margin: 5px;
+        max-width: 70%;
+        word-wrap: break-word;
+    }
+    .chat-bot {
+        background-color: #F1F0F0;
+        align-self: flex-start;
+        padding: 10px 15px;
+        border-radius: 15px;
+        margin: 5px;
+        max-width: 70%;
+        word-wrap: break-word;
+    }
+    .chat-input {
+        padding: 5px 10px;
+        border-top: 1px solid #ccc;
+        background-color: #fff;
+    }
+    @media (prefers-color-scheme: dark) {
+        .chat-user { background-color: #3A523A; color: white; }
+        .chat-bot { background-color: #2E2E2E; color: white; }
+        .chat-input { background-color: #1E1E1E; color: white; border-top: 1px solid #555; }
+    }
+    </style>
     """, unsafe_allow_html=True)
-    
-    # Chat container
-    st.markdown('<div class="chat-container" id="chat-container">', unsafe_allow_html=True)
+
+    st.markdown('<div class="chat-wrapper">', unsafe_allow_html=True)
+    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+
     for speaker, msg in st.session_state.history:
         if speaker == "You":
-            st.markdown(f'<div class="chat-user">{msg}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="chat-user">You: {msg}</div>', unsafe_allow_html=True)
         else:
-            st.markdown(f'<div class="chat-bot">{msg}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="chat-bot">Bot: {msg}</div>', unsafe_allow_html=True)
+
     st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Scroll to bottom using JS
-    st.markdown("""
-    <script>
-    var chatContainer = document.getElementById('chat-container');
-    if (chatContainer) {
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-    }
-    </script>
-    """, unsafe_allow_html=True)
+
+    # Input box pinned at bottom
+    st.markdown('<div class="chat-input">', unsafe_allow_html=True)
+    if user_input := st.chat_input("Ask me anything about the university..."):
+        bot_reply(user_input)
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 with tab2:
     show_analytics()
