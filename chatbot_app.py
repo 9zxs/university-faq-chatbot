@@ -19,9 +19,9 @@ FEEDBACK_PATH = BASE_DIR / "data" / "feedback.json"
 # Supported languages
 # =============================
 SUPPORTED_LANGS = {
-    "en": "en",        # English
-    "ms": "ms",        # Malay
-    "zh-cn": "zh-CN"   # Chinese (Simplified)
+    "en": "en",       # English
+    "ms": "ms",       # Malay
+    "zh-cn": "zh-CN"  # Chinese (Simplified)
 }
 
 # =============================
@@ -42,6 +42,16 @@ intents = load_intents()
 # =============================
 # Utils
 # =============================
+def translate_text(text, target_lang):
+    try:
+        if target_lang == "en":
+            return text
+        if target_lang in ["ms", "zh-CN"]:
+            return GoogleTranslator(source="en", target=target_lang).translate(text)
+        return text
+    except Exception:
+        return text
+
 def log_interaction(user_text, detected_lang, translated_input, predicted_tag, bot_reply, confidence):
     log_entry = {
         "timestamp": datetime.datetime.now().isoformat(),
@@ -61,13 +71,19 @@ def log_interaction(user_text, detected_lang, translated_input, predicted_tag, b
     with open(LOG_PATH, "w", encoding="utf-8") as f:
         json.dump(logs, f, indent=2)
 
-def get_contextual_response(tag, user_input, conversation_context):
-    response = "I'm not sure I understand. Could you rephrase?"
+def get_contextual_response(tag, user_input, conversation_context, detected_lang="en"):
+    fallback_response = "Sorry, I didn't quite get that. Could you rephrase?"
+    response = fallback_response
+
     for intent in intents:
         if tag == intent.get("tag") or tag == intent.get("intent"):
             if "responses" in intent:
-                response = random.choice(intent["responses"])
+                if isinstance(intent["responses"], list):
+                    response = random.choice(intent["responses"])
             break
+
+    # ✅ Translate response to user's language if needed
+    response = translate_text(response, detected_lang)
     return response
 
 # =============================
@@ -88,16 +104,11 @@ def bot_reply(user_text):
     translated_input = user_text
     try:
         lang = detect(user_text)
-        if lang.startswith("ms"):
-            detected_lang = "ms"
-        elif lang.startswith("zh"):
-            detected_lang = "zh-CN"
-        else:
-            detected_lang = "en"
+        detected_lang = SUPPORTED_LANGS.get(lang.lower(), "en")  # fallback to English
     except:
         detected_lang = "en"
 
-    # Translate to English if needed
+    # Translate to English if needed for intent prediction
     if detected_lang != "en":
         try:
             translated_input = GoogleTranslator(source=detected_lang, target="en").translate(user_text)
@@ -112,16 +123,8 @@ def bot_reply(user_text):
         tag = "fallback"
         confidence = 0.1
 
-    # Get response in English
-    reply_en = get_contextual_response(tag, translated_input, st.session_state.conversation_context)
-    reply = reply_en
-
-    # Translate reply back if not English
-    if detected_lang != "en":
-        try:
-            reply = GoogleTranslator(source="en", target=detected_lang).translate(reply_en)
-        except:
-            reply = reply_en
+    # Get response (English → translated if needed)
+    reply = get_contextual_response(tag, user_text, st.session_state.conversation_context, detected_lang)
 
     # Update context
     st.session_state.conversation_context.append({
@@ -267,7 +270,7 @@ with tab1:
         chat_html += f'<div class="{bubble_class}">{speaker}: {msg}</div>'
     chat_html += '</div>'
 
-    # Auto-scroll JS
+    # Add JS for auto-scroll
     chat_html += """
         <script>
             var chatBox = document.getElementById('chat-box');
