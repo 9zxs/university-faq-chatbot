@@ -276,16 +276,16 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Display chat
+# Chat UI
 st.markdown('<div style="display:flex; flex-direction:column;">', unsafe_allow_html=True)
 for speaker, msg in st.session_state.history:
     cls = "user-bubble" if speaker=="You" else "bot-bubble"
-    st.markdown(f'<div class="{cls}">{speaker}: {msg}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="{cls}">{msg}</div>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-
-    # Input box with immediate response
-    st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
+# Immediate input
+if user_input := st.chat_input("Ask me anything..."):
+    bot_reply(user_input)
 
 with tab2:
     show_analytics()
