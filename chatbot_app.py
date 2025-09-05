@@ -10,11 +10,11 @@ import pandas as pd
 # =============================
 # Configuration & Paths
 # =============================
-DATA_PATH = Path(__file__).resolve().parent / "data" / "intents.json"
-MODEL_PATH = Path(__file__).resolve().parent / "model.joblib"
-LOG_PATH = Path(__file__).resolve().parent / "data" / "chat_logs.json"
-KEYWORDS_PATH = Path(__file__).resolve().parent / "data" / "lang_keywords.json"
-FEEDBACK_PATH = Path(__file__).resolve().parent / "data" / "feedback.json"
+DATA_PATH = Path(_file_).resolve().parent / "data" / "intents.json"
+MODEL_PATH = Path(_file_).resolve().parent / "model.joblib"
+LOG_PATH = Path(_file_).resolve().parent / "data" / "chat_logs.json"
+KEYWORDS_PATH = Path(_file_).resolve().parent / "data" / "lang_keywords.json"
+FEEDBACK_PATH = Path(_file_).resolve().parent / "data" / "feedback.json"
 
 # =============================
 # Enhanced logging with sentiment tracking
@@ -44,7 +44,7 @@ def log_interaction(user_text, detected_lang, translated_input, predicted_tag, b
         with open(LOG_PATH, "w", encoding="utf-8") as f:
             json.dump(logs, f, indent=2, ensure_ascii=False)
     except Exception as e:
-        st.warning(f"⚠️ Could not save log: {e}")
+        st.warning(f"⚠ Could not save log: {e}")
 
 # =============================
 # Enhanced model loading
@@ -262,7 +262,7 @@ st.set_page_config(page_title="🎓 University FAQ Chatbot", page_icon="🤖", l
 init_session()
 
 # Header
-logo_path = Path(__file__).resolve().parent / "data" / "university_logo.png"
+logo_path = Path(_file_).resolve().parent / "data" / "university_logo.png"
 col1, col2 = st.columns([1, 4])
 with col1:
     if logo_path.exists():
@@ -273,7 +273,7 @@ with col2:
 
 # Sidebar
 with st.sidebar:
-    with st.expander("ℹ️ Info", expanded=True):
+    with st.expander("ℹ Info", expanded=True):
         st.info(
             "This AI chatbot helps answer questions about:\n\n"
             "• 📚 Admissions & Requirements\n"
@@ -286,7 +286,7 @@ with st.sidebar:
     with st.expander("🔧 Session Info", expanded=True):
         st.text(f"Session ID: {st.session_state.session_id}")
         st.text(f"Messages: {len(st.session_state.history)}")
-        if st.button("🗑️ Clear Chat"):
+        if st.button("🗑 Clear Chat"):
             st.session_state.history = []
             st.session_state.conversation_context = []
             st.rerun()
@@ -321,22 +321,13 @@ with tab1:
     if user_input := st.chat_input("Ask me anything about the university..."):
         bot_reply(user_input)
 
+    # Custom styles
     st.markdown("""
     <style>
         .chat-container {
             max-height: 400px;
             overflow-y: auto;
-            display: flex;
         }
-
-        .chat_input{
-            max-height: 400px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column-reverse; /* this puts new messages at the bottom, above input */
-        }
-        
-        /* User messages (right side) */
         .chat-user {
             background-color: #DCF8C6;
             float: right;
@@ -349,11 +340,7 @@ with tab1:
             font-size: 16px;
             word-wrap: break-word;
             max-width: 70%;
-            min-width: 50px;
-            color: var(--text-color);
         }
-        
-        /* Bot messages (left side) */
         .chat-bot {
             background-color: #F1F0F0;
             float: left;
@@ -366,11 +353,7 @@ with tab1:
             font-size: 16px;
             word-wrap: break-word;
             max-width: 70%;
-            min-width: 50px;
-            color: var(--text-color);
         }
-        
-        /* Dark mode adjustments */
         @media (prefers-color-scheme: dark) {
             .chat-bot { background-color: #2E2E2E; }
             .chat-user { background-color: #3A523A; }
@@ -378,13 +361,24 @@ with tab1:
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+    # Render messages
+    st.markdown('<div id="chat-box" class="chat-container">', unsafe_allow_html=True)
     for speaker, msg in st.session_state.history:
         if speaker == "You":
             st.markdown(f'<div class="chat-user">You: {msg}</div>', unsafe_allow_html=True)
         else:
             st.markdown(f'<div class="chat-bot">Bot: {msg}</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # ✅ Auto-scroll to bottom when new messages appear
+    st.markdown("""
+    <script>
+        var chatBox = window.parent.document.querySelector('#chat-box');
+        if (chatBox) {
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+    </script>
+    """, unsafe_allow_html=True)
 
 with tab2:
     show_analytics()
