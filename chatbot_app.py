@@ -228,8 +228,8 @@ st.markdown("""
         .chat-container {
             display: flex;
             flex-direction: column;
-            height: 500px;          /* Fixed height */
-            overflow-y: auto;       /* Enable vertical scroll */
+            height: 500px;          /* fixed height */
+            overflow-y: auto;       /* scrollable */
             border: 1px solid #ddd;
             padding: 10px;
             border-radius: 10px;
@@ -258,13 +258,17 @@ st.markdown("""
 # Chat and Analytics Tabs
 tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
 with tab1:
-    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+    # Build the conversation HTML
+    chat_html = '<div class="chat-container">'
     for speaker, msg in st.session_state.history:
         bubble_class = "user-bubble" if speaker == "You" else "bot-bubble"
-        st.markdown(f'<div class="{bubble_class}">{speaker}: {msg}</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+        chat_html += f'<div class="{bubble_class}">{speaker}: {msg}</div>'
+    chat_html += '</div>'
 
-    # Input box stays outside the scroll area
+    # Render the scrollable chat
+    st.markdown(chat_html, unsafe_allow_html=True)
+
+    # Input stays below
     st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
 
 with tab2:
