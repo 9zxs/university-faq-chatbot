@@ -233,7 +233,6 @@ st.markdown("""
             border: 1px solid #ddd;
             padding: 10px;
             border-radius: 10px;
-            background-color: #fafafa;
         }
         .user-bubble, .bot-bubble {
             padding: 10px;
