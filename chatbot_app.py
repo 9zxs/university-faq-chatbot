@@ -1,131 +1,96 @@
 import streamlit as st
-import joblib, random, json, re
+import joblib, json, random, datetime, uuid
 from pathlib import Path
 from deep_translator import GoogleTranslator
 from langdetect import detect
-import datetime
-import plotly.express as px
 import pandas as pd
+import plotly.express as px
 
 # =============================
-# Configuration & Paths
+# File paths
 # =============================
-DATA_PATH = Path(__file__).resolve().parent / "data" / "intents.json"
-MODEL_PATH = Path(__file__).resolve().parent / "model.joblib"
-LOG_PATH = Path(__file__).resolve().parent / "data" / "chat_logs.json"
-KEYWORDS_PATH = Path(__file__).resolve().parent / "data" / "lang_keywords.json"
-FEEDBACK_PATH = Path(__file__).resolve().parent / "data" / "feedback.json"
+BASE_DIR = Path(__file__).resolve().parent
+INTENTS_PATH = BASE_DIR / "data" / "intents.json"
+MODEL_PATH = BASE_DIR / "model.joblib"
+LOG_PATH = BASE_DIR / "data" / "chat_logs.json"
+LANG_PATH = BASE_DIR / "data" / "lang_keywords.json"
+FEEDBACK_PATH = BASE_DIR / "data" / "feedback.json"
 
 # =============================
-# Logging
-# =============================
-def log_interaction(user_text, detected_lang, translated_input, predicted_tag, bot_reply, confidence=0.0, feedback=None):
-    try:
-        if LOG_PATH.exists():
-            with open(LOG_PATH, "r", encoding="utf-8") as f:
-                logs = json.load(f)
-        else:
-            logs = []
-
-        logs.append({
-            "timestamp": datetime.datetime.now().isoformat(),
-            "user_text": user_text,
-            "detected_lang": detected_lang,
-            "translated_input": translated_input,
-            "predicted_tag": predicted_tag,
-            "bot_reply": bot_reply,
-            "confidence": confidence,
-            "session_id": st.session_state.get("session_id", "unknown"),
-            "feedback": feedback
-        })
-
-        with open(LOG_PATH, "w", encoding="utf-8") as f:
-            json.dump(logs, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        st.warning(f"⚠️ Could not save log: {e}")
-
-# =============================
-# Load model and responses
+# Load model and intents
 # =============================
 @st.cache_resource
-def load_model_and_data():
-    clf = joblib.load(MODEL_PATH)
-    with open(DATA_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    responses = {intent.get("tag") or intent.get("intent"): intent.get("responses", []) for intent in data["intents"]}
-    return clf, responses
+def load_model():
+    return joblib.load(MODEL_PATH)
 
-clf, responses = load_model_and_data()
+@st.cache_resource
+def load_intents():
+    with open(INTENTS_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)["intents"]
 
-# =============================
-# Session initialization
-# =============================
-def init_session():
-    if "session_id" not in st.session_state:
-        st.session_state.session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    if "history" not in st.session_state:
-        st.session_state.history = []
-    if "conversation_context" not in st.session_state:
-        st.session_state.conversation_context = []
+@st.cache_resource
+def load_lang_keywords():
+    with open(LANG_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-init_session()
+clf = load_model()
+intents = load_intents()
+lang_keywords = load_lang_keywords()
 
 # =============================
-# Language detection
+# Utils
 # =============================
-def detect_supported_lang(text):
-    if KEYWORDS_PATH.exists():
-        with open(KEYWORDS_PATH, "r", encoding="utf-8") as f:
-            lang_keywords = json.load(f)
-    else:
-        lang_keywords = {"ms": [], "zh-CN": []}
-
-    t = text.lower()
-    ms_score = sum(1 for word in lang_keywords.get("ms", []) if word in t)
-    zh_score = sum(1 for word in text if word in lang_keywords.get("zh-CN", []))
-
-    if ms_score > 0:
-        return "ms", ms_score / len(text.split())
-    if zh_score > 0:
-        return "zh-CN", zh_score / len(text)
-
-    try:
-        detected = detect(text)
-        confidence = 0.8
-        if detected in ["en"]: return "en", confidence
-        elif detected in ["ms", "id"]: return "ms", confidence
-        elif detected in ["zh", "zh-cn", "zh-tw"]: return "zh-CN", confidence
-        else: return "en", 0.5
-    except:
-        return "en", 0.3
-
-# =============================
-# Context-aware response
-# =============================
-def get_contextual_response(tag, user_text, conversation_history):
-    base_responses = responses.get(tag, responses.get("fallback", ["Sorry, I didn't understand that."]))
-    if tag == "greeting" and len(conversation_history) > 2:
-        base_responses = ["Welcome back! How can I help you today?", "Hello again! What would you like to know?"]
-    follow_ups = {
-        "admissions_requirements": "\n\n💡 You might also want to ask about tuition fees or scholarship opportunities.",
-        "tuition_fees": "\n\n💡 Don't forget to check our scholarship programs!",
-        "scholarship": "\n\n💡 Would you like to know about the application deadlines?",
-        "exam_schedule": "\n\n💡 Need help with library hours for studying?",
+def log_interaction(user_text, detected_lang, translated_input, predicted_tag, bot_reply, confidence):
+    log_entry = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "session_id": st.session_state.session_id,
+        "user_text": user_text,
+        "detected_lang": detected_lang,
+        "translated_input": translated_input,
+        "predicted_tag": predicted_tag,
+        "bot_reply": bot_reply,
+        "confidence": confidence
     }
-    response = random.choice(base_responses)
-    if tag in follow_ups:
-        response += follow_ups[tag]
+    logs = []
+    if LOG_PATH.exists():
+        with open(LOG_PATH, "r", encoding="utf-8") as f:
+            logs = json.load(f)
+    logs.append(log_entry)
+    with open(LOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(logs, f, indent=2)
+
+def get_contextual_response(tag, user_input, conversation_context):
+    response = "I'm not sure I understand. Could you rephrase?"
+    for intent in intents:
+        if tag == intent.get("tag") or tag == intent.get("intent"):
+            if "responses" in intent:
+                response = random.choice(intent["responses"])
+            break
     return response
 
 # =============================
-# Bot reply (immediate)
+# Session state
+# =============================
+if "history" not in st.session_state:
+    st.session_state.history = []
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())[:8]
+if "conversation_context" not in st.session_state:
+    st.session_state.conversation_context = []
+
+# =============================
+# Chatbot logic
 # =============================
 def bot_reply(user_text):
-    detected_lang, lang_confidence = detect_supported_lang(user_text)
+    detected_lang = "en"
     translated_input = user_text
+    try:
+        detected_lang = detect(user_text)
+    except:
+        pass
     if detected_lang != "en":
         try:
-            translated_input = GoogleTranslator(source="auto", target="en").translate(user_text)
+            translated_input = GoogleTranslator(source=detected_lang, target="en").translate(user_text)
         except:
             translated_input = user_text
     try:
@@ -155,7 +120,6 @@ def bot_reply(user_text):
     st.session_state.history.append(("You", user_text))
     st.session_state.history.append(("Bot", reply))
     log_interaction(user_text, detected_lang, translated_input, tag, reply, confidence)
-    # Clear input after submit
     st.session_state.input = ""
 
 # =============================
@@ -233,7 +197,6 @@ with col2:
     st.title("🎓 University FAQ Chatbot")
     st.caption("Multilingual support: English • Malay • 中文")
 
-# Sidebar
 with st.sidebar:
     st.subheader("ℹ️ Info")
     st.info("This AI chatbot helps answer questions about:\n• Admissions\n• Tuition & Scholarships\n• Exams\n• Library\n• Housing\n• Office Hours")
@@ -244,52 +207,44 @@ with st.sidebar:
         st.session_state.history = []
         st.session_state.conversation_context = []
 
-# =============================
-# Theme-aware chat CSS
-# =============================
+# CSS styling
 st.markdown("""
-<style>
-.user-bubble, .bot-bubble {
-    padding: 10px;
-    border-radius: 10px;
-    margin: 5px;
-    max-width: 70%;
-    word-wrap: break-word;
-}
-
-/* Light theme */
-@media (prefers-color-scheme: light) {
-    .user-bubble { background-color: #DCF8C6; color: #000; align-self: flex-end; }
-    .bot-bubble { background-color: #F1F0F0; color: #000; align-self: flex-start; }
-}
-
-/* Dark theme */
-@media (prefers-color-scheme: dark) {
-    .user-bubble { background-color: #4A8B4E; color: #fff; align-self: flex-end; }
-    .bot-bubble { background-color: #3A3A3A; color: #fff; align-self: flex-start; }
-}
-
-.chat-container {
-    display: flex;
-    flex-direction: column;
-}
-</style>
+    <style>
+        .user-bubble, .bot-bubble {
+            padding: 10px;
+            border-radius: 10px;
+            margin: 5px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        
+        /* Light theme */
+        @media (prefers-color-scheme: light) {
+            .user-bubble { background-color: #DCF8C6; color: #000; align-self: flex-end; }
+            .bot-bubble { background-color: #F1F0F0; color: #000; align-self: flex-start; }
+        }
+        
+        /* Dark theme */
+        @media (prefers-color-scheme: dark) {
+            .user-bubble { background-color: #4A8B4E; color: #fff; align-self: flex-end; }
+            .bot-bubble { background-color: #3A3A3A; color: #fff; align-self: flex-start; }
+        }
+        
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+        }
+    </style>
 """, unsafe_allow_html=True)
 
-# =============================
 # Chat and Analytics Tabs
-# =============================
 tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
 with tab1:
-    # Chat display
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
     for speaker, msg in st.session_state.history:
         bubble_class = "user-bubble" if speaker == "You" else "bot-bubble"
         st.markdown(f'<div class="{bubble_class}">{speaker}: {msg}</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
-
-    # Input box with immediate response
     st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
-
 with tab2:
     show_analytics()
