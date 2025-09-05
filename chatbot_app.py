@@ -368,7 +368,6 @@ with tab1:
     # Input box pinned at bottom
     if user_input := st.chat_input("Ask me anything about the university..."):
         bot_reply(user_input)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 with tab2:
     show_analytics()
