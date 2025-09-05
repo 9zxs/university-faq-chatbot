@@ -228,7 +228,7 @@ st.markdown("""
         .chat-container {
             display: flex;
             flex-direction: column;
-            height: 500px;          /* fixed height */
+            height: 300px;          /* fixed height */
             overflow-y: auto;       /* scrollable */
             border: 1px solid #ddd;
             padding: 10px;
