@@ -323,14 +323,6 @@ with tab1:
     # ==========================
     st.markdown("""
     <style>
-    .chat-wrapper {
-        display: flex;
-        flex-direction: column;
-        height: 500px;
-        border: 1px solid #ccc;
-        border-radius: 10px;
-        overflow: hidden;
-    }
     .chat-container {
         flex-grow: 1;
         overflow-y: auto;
@@ -369,7 +361,6 @@ with tab1:
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="chat-wrapper">', unsafe_allow_html=True)
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 
     for speaker, msg in st.session_state.history:
