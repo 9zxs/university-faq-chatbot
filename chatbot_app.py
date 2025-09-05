@@ -323,68 +323,87 @@ with tab1:
 
     st.markdown("""
     <style>
+        /* Chat container */
         .chat-container {
-            max-height: 400px;
+            max-height: 500px;
             overflow-y: auto;
             display: flex;
-        }
-
-        .chat_input{
-            max-height: 400px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column-reverse; /* this puts new messages at the bottom, above input */
+            flex-direction: column;
+            gap: 8px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 10px;
         }
         
-        /* User messages (right side) */
+        /* User messages (right) */
         .chat-user {
+            align-self: flex-end;
             background-color: #DCF8C6;
-            float: right;
-            clear: both;
-            text-align: right;
-            display: inline-block;
+            color: #000;
             padding: 10px 15px;
-            border-radius: 15px;
-            margin: 5px;
-            font-size: 16px;
-            word-wrap: break-word;
+            border-radius: 20px 20px 0px 20px;
             max-width: 70%;
-            min-width: 50px;
-            color: var(--text-color);
+            word-wrap: break-word;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         
-        /* Bot messages (left side) */
+        /* Bot messages (left) */
         .chat-bot {
+            align-self: flex-start;
             background-color: #F1F0F0;
-            float: left;
-            clear: both;
-            text-align: left;
-            display: inline-block;
+            color: #000;
             padding: 10px 15px;
-            border-radius: 15px;
-            margin: 5px;
-            font-size: 16px;
-            word-wrap: break-word;
+            border-radius: 20px 20px 20px 0px;
             max-width: 70%;
-            min-width: 50px;
-            color: var(--text-color);
+            word-wrap: break-word;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         
         /* Dark mode adjustments */
         @media (prefers-color-scheme: dark) {
-            .chat-bot { background-color: #2E2E2E; }
-            .chat-user { background-color: #3A523A; }
+            .chat-container { background-color: #1e1e1e; }
+            .chat-bot { background-color: #2E2E2E; color: #fff; }
+            .chat-user { background-color: #3A523A; color: #fff; }
         }
-    </style>
+        
+        /* Scrollbar */
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-container::-webkit-scrollbar-thumb {
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 3px;
+        }
+        
+        /* Chat input (sticky) */
+        .chat-input-container {
+            position: sticky;
+            bottom: 0;
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        </style>
     """, unsafe_allow_html=True)
-
-    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+    
+    # Chat container
+    st.markdown('<div class="chat-container" id="chat-container">', unsafe_allow_html=True)
     for speaker, msg in st.session_state.history:
         if speaker == "You":
-            st.markdown(f'<div class="chat-user">You: {msg}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="chat-user">{msg}</div>', unsafe_allow_html=True)
         else:
-            st.markdown(f'<div class="chat-bot">Bot: {msg}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="chat-bot">{msg}</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Scroll to bottom using JS
+    st.markdown("""
+    <script>
+    var chatContainer = document.getElementById('chat-container');
+    if (chatContainer) {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    </script>
+    """, unsafe_allow_html=True)
 
 with tab2:
     show_analytics()
