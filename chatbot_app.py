@@ -17,7 +17,7 @@ KEYWORDS_PATH = Path(__file__).resolve().parent / "data" / "lang_keywords.json"
 FEEDBACK_PATH = Path(__file__).resolve().parent / "data" / "feedback.json"
 
 # =============================
-# Enhanced logging with sentiment tracking
+# Logging interactions
 # =============================
 def log_interaction(user_text, detected_lang, translated_input, predicted_tag, bot_reply, confidence=0.0, feedback=None):
     try:
@@ -38,7 +38,6 @@ def log_interaction(user_text, detected_lang, translated_input, predicted_tag, b
             "session_id": st.session_state.get("session_id", "unknown"),
             "feedback": feedback
         }
-
         logs.append(log_entry)
 
         with open(LOG_PATH, "w", encoding="utf-8") as f:
@@ -47,12 +46,11 @@ def log_interaction(user_text, detected_lang, translated_input, predicted_tag, b
         st.warning(f"⚠️ Could not save log: {e}")
 
 # =============================
-# Enhanced model loading
+# Load model and intents
 # =============================
 @st.cache_resource
 def load_model_and_data():
     clf = joblib.load(MODEL_PATH)
-
     with open(DATA_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -71,15 +69,14 @@ clf, responses = load_model_and_data()
 def init_session():
     if "session_id" not in st.session_state:
         st.session_state.session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-
     if "history" not in st.session_state:
         st.session_state.history = []
-
     if "user_satisfaction" not in st.session_state:
         st.session_state.user_satisfaction = []
-
     if "conversation_context" not in st.session_state:
         st.session_state.conversation_context = []
+
+init_session()
 
 # =============================
 # Language detection
@@ -119,7 +116,6 @@ def detect_supported_lang(text):
 # =============================
 def get_contextual_response(tag, user_text, conversation_history):
     base_responses = responses.get(tag, responses.get("fallback", ["Sorry, I didn't understand that."]))
-
     if tag == "greeting" and len(conversation_history) > 2:
         base_responses = ["Welcome back! How can I help you today?", "Hello again! What would you like to know?"]
 
@@ -133,15 +129,13 @@ def get_contextual_response(tag, user_text, conversation_history):
     response = random.choice(base_responses)
     if tag in follow_ups:
         response += follow_ups[tag]
-
     return response
 
 # =============================
-# Bot reply with confidence
+# Bot reply
 # =============================
 def bot_reply(user_text):
     detected_lang, lang_confidence = detect_supported_lang(user_text)
-
     if detected_lang != "en":
         try:
             translated_input = GoogleTranslator(source="auto", target="en").translate(user_text)
@@ -205,7 +199,6 @@ def save_feedback(rating, comment=""):
             "comment": comment,
             "conversation_length": len(st.session_state.history)
         }
-
         feedback_data.append(feedback_entry)
 
         with open(FEEDBACK_PATH, "w", encoding="utf-8") as f:
@@ -216,7 +209,7 @@ def save_feedback(rating, comment=""):
         st.error(f"Error saving feedback: {e}")
 
 # =============================
-# Analytics Dashboard
+# Analytics
 # =============================
 def show_analytics():
     st.header("📊 Analytics Dashboard")
@@ -256,10 +249,9 @@ def show_analytics():
         st.error(f"Error loading analytics: {e}")
 
 # =============================
-# Main App Configuration
+# App Layout
 # =============================
 st.set_page_config(page_title="🎓 University FAQ Chatbot", page_icon="🤖", layout="wide", initial_sidebar_state="expanded")
-init_session()
 
 # Header
 logo_path = Path(__file__).resolve().parent / "data" / "university_logo.png"
@@ -305,6 +297,7 @@ with st.sidebar:
 
 # Tabs
 tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
+
 with tab1:
     st.subheader("🔍 Quick Questions")
     col1, col2, col3, col4 = st.columns(4)
@@ -317,18 +310,23 @@ with tab1:
     for col, (label, query) in zip([col1, col2, col3, col4], quick_buttons):
         if col.button(label, use_container_width=True):
             bot_reply(query)
+            st.experimental_rerun()
 
     # ==========================
-    # Chat UI
+    # Chat UI (fixed)
     # ==========================
     st.markdown("""
     <style>
     .chat-container {
-        flex-grow: 1;
+        height: 400px;
         overflow-y: auto;
         padding: 10px;
         display: flex;
-        flex-direction: column;
+        flex-direction: column-reverse;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        background-color: #fafafa;
     }
     .chat-user {
         background-color: #DCF8C6;
@@ -355,19 +353,20 @@ with tab1:
     </style>
     """, unsafe_allow_html=True)
 
+    # Render chat bubbles
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-
-    for speaker, msg in st.session_state.history:
+    for speaker, msg in reversed(st.session_state.history):
         if speaker == "You":
             st.markdown(f'<div class="chat-user">You: {msg}</div>', unsafe_allow_html=True)
         else:
             st.markdown(f'<div class="chat-bot">Bot: {msg}</div>', unsafe_allow_html=True)
-
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Input box pinned at bottom
-    if user_input := st.chat_input("Ask me anything about the university..."):
+    user_input = st.chat_input("Ask me anything about the university...")
+    if user_input:
         bot_reply(user_input)
+        st.experimental_rerun()  # ensures immediate display
 
 with tab2:
     show_analytics()
