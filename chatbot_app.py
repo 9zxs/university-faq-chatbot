@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import joblib, json, random, datetime, uuid
 from pathlib import Path
 from deep_translator import GoogleTranslator
@@ -229,8 +228,8 @@ st.markdown("""
         .chat-container {
             display: flex;
             flex-direction: column;
-            height: 300px;
-            overflow-y: auto;
+            height: 300px;          /* fixed height */
+            overflow-y: auto;       /* scrollable */
             border: 1px solid #ddd;
             padding: 10px;
             border-radius: 10px;
@@ -257,29 +256,27 @@ st.markdown("""
 tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
 with tab1:
     # Build the conversation HTML
-    chat_html = """
-    <div class="chat-container" id="chat-box">
-    """
+    chat_html = '<div class="chat-container" id="chat-box">'
     for speaker, msg in st.session_state.history:
         bubble_class = "user-bubble" if speaker == "You" else "bot-bubble"
         chat_html += f'<div class="{bubble_class}">{speaker}: {msg}</div>'
-    chat_html += "</div>"
+    chat_html += '</div>'
 
-    # Auto-scroll JavaScript
+    # Add JS for auto-scroll
     chat_html += """
-    <script>
-        var chatBox = document.getElementById('chat-box');
-        if (chatBox) {
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
-    </script>
+        <script>
+            var chatBox = document.getElementById('chat-box');
+            if (chatBox) {
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        </script>
     """
 
-    # Render inside an iframe so JS always runs
-    components.html(chat_html, height=520, scrolling=True)
+    # Render chat
+    st.markdown(chat_html, unsafe_allow_html=True)
 
-    # Input stays below
+    # Input field
     st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
-    
+
 with tab2:
     show_analytics()
