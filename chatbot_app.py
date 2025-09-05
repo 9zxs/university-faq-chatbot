@@ -246,19 +246,6 @@ with st.sidebar:
         
 st.markdown("""
     <style>
-        .chat-container {
-            max-height: 400px;
-            overflow-y: auto;
-            display: flex;
-        }
-
-        .chat_input{
-            max-height: 400px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column-reverse; /* this puts new messages at the bottom, above input */
-        }
-        
         /* User messages (right side) */
         .chat-user {
             background-color: #DCF8C6;
@@ -308,7 +295,7 @@ with tab1:
     # Chat display
     st.markdown('<div style="display:flex; flex-direction:column;">', unsafe_allow_html=True)
     for speaker, msg in st.session_state.history:
-        color = "#DCF8C6" if speaker=="You" else "#F1F0F0"
+        color = "#2E2E2E" if speaker=="You" else "#3A523A"
         st.markdown(f'<div style="background:{color}; padding:10px; border-radius:10px; margin:5px;">{speaker}: {msg}</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
