@@ -222,7 +222,7 @@
       "tag": "syllabus",
       "patterns": [
         "syllabus",
-        "timetable",
+        "timetable"
       ],
       "responses": [
         "--line 228--"
