@@ -170,64 +170,40 @@ def get_csv_response(user_input, detected_lang="en"):
         "zh-CN": "抱歉，我还不知道。请联系管理办公室。"
     }
 
-    try:
-        translated_input = user_input
-        if detected_lang == "zh-CN":
-            translated_input = GoogleTranslator(source="zh-CN", target="en").translate(user_input)
+    translated_input = user_input
+    if detected_lang == "zh-CN":
+        translated_input = GoogleTranslator(source="zh-CN", target="en").translate(user_input)
+    user_input_lower = translated_input.lower()
 
-        user_input_lower = translated_input.lower()
-
-        # 1. Handle courses
-        if st.session_state.course_pending:
-            if user_input_lower in ["yes", "y", "是"]:
-                course = st.session_state.course_pending
+    # 1. If there is a pending course confirmation
+    if st.session_state.course_pending:
+        if user_input_lower in ["yes", "y", "是"]:
+            course = st.session_state.course_pending
+            st.session_state.course_pending = None
+            if course in COURSES:
                 syllabus = COURSES[course]["syllabus"]
                 response = ""
                 for sem, subjects in syllabus.items():
                     response += f"{sem}: {', '.join(subjects)}\n"
-                st.session_state.course_pending = None
                 return response.strip(), 1.0, translated_input
-            else:
-                st.session_state.course_pending = None
-
-        # 2. Check keyword map
-        if user_input_lower in KEYWORD_MAP:
-            mapped_q = KEYWORD_MAP[user_input_lower]
-
-            # If mapped to a course
-            if mapped_q in COURSES:
-                st.session_state.course_pending = mapped_q
-                return f"Do you mean the '{mapped_q.title()}' course?", 1.0, translated_input
-
-            answer_row = knowledge_base.loc[knowledge_base["question"].str.lower() == mapped_q]
-            if not answer_row.empty:
-                response = answer_row["answer"].values[0]
-                confidence = 1.0
-                if detected_lang == "zh-CN":
-                    response = GoogleTranslator(source="en", target="zh-CN").translate(response)
-                return response, confidence, translated_input
-
-        # 3. Fuzzy match
-        questions = knowledge_base["question"].tolist()
-        matches = find_best_matches(translated_input, questions, threshold=0.3)
-
-        if matches:
-            matched_q = matches[0][0]
-            answer = knowledge_base.loc[knowledge_base["question"].str.lower() == matched_q.lower(), "answer"].values[0]
-            response = answer
-            confidence = matches[0][1]
         else:
-            response = fallback_response[detected_lang]
-            confidence = 0.0
+            st.session_state.course_pending = None
 
-        if detected_lang == "zh-CN" and response != fallback_response["zh-CN"]:
-            response = GoogleTranslator(source="en", target="zh-CN").translate(response)
+    # 2. Check if the user input matches a course keyword
+    mapped_q = KEYWORD_MAP.get(user_input_lower, user_input_lower)
+    if mapped_q in COURSES:
+        st.session_state.course_pending = mapped_q
+        return f"Do you mean the '{mapped_q.title()}' course?", 1.0, translated_input
 
-        return response, confidence, translated_input
+    # 3. Fuzzy match with CSV knowledge base
+    questions = knowledge_base["question"].tolist()
+    matches = find_best_matches(translated_input, questions, threshold=0.3)
+    if matches:
+        matched_q = matches[0][0]
+        answer = knowledge_base.loc[knowledge_base["question"].str.lower() == matched_q.lower(), "answer"].values[0]
+        return answer, matches[0][1], translated_input
 
-    except Exception as e:
-        print("Error in get_csv_response:", e)
-        return fallback_response[detected_lang], 0.0, user_input
+    return fallback_response[detected_lang], 0.0, translated_input
 
 # =============================
 # Bot reply
