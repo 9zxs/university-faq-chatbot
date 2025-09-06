@@ -248,6 +248,24 @@ st.markdown("""
 
 tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
 with tab1:
+    # Quick FAQ buttons
+    st.subheader("Quick Questions")
+    faq_options = [
+        "Admissions", 
+        "Tuition", 
+        "Exams", 
+        "Library", 
+        "Housing", 
+        "Office Hours"
+    ]
+    cols = st.columns(len(faq_options))
+    for i, option in enumerate(faq_options):
+        if cols[i].button(option):
+            # Use the FAQ option as user input
+            st.session_state.input = option
+            bot_reply(option)
+
+    # Chat history
     chat_html = '<div class="chat-container" id="chat-box">'
     for speaker, msg in st.session_state.history:
         bubble_class = "user-bubble" if speaker=="You" else "bot-bubble"
@@ -255,7 +273,9 @@ with tab1:
     chat_html += '</div>'
     chat_html += "<script>var chatBox=document.getElementById('chat-box');if(chatBox){chatBox.scrollTop=chatBox.scrollHeight;}</script>"
     st.markdown(chat_html, unsafe_allow_html=True)
-    st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
 
+    # User input
+    st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
+    
 with tab2:
     show_analytics()
