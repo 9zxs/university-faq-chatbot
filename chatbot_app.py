@@ -30,6 +30,12 @@ LANG_CODES = {
     "zh-cn": "zh-CN"
 }
 
+# Enhanced greeting patterns for better recognition
+GREETING_PATTERNS = {
+    "en": ["hello", "hi", "hey", "good morning", "good afternoon", "good evening", "greetings", "hola"],
+    "zh-cn": ["你好", "您好", "早上好", "下午好", "晚上好", "嗨", "hi", "hello"]
+}
+
 # =============================
 # Enhanced Error Handling and Validation
 # =============================
@@ -42,7 +48,7 @@ def validate_input(text):
     if not text or not isinstance(text, str):
         raise ChatbotException("Invalid input provided")
     
-    # Remove potential harmful characters
+    # Remove potential harmful characters but preserve Chinese characters
     sanitized = re.sub(r'[<>"\']', '', text.strip())
     
     # Check length
@@ -65,13 +71,25 @@ def safe_translate(text, target_lang, source_lang="auto"):
         return text
 
 def safe_detect_language(text):
-    """Safe language detection with fallback"""
+    """Enhanced language detection with better Chinese support"""
     try:
         if not text:
             return "en"
+        
+        # Check for Chinese characters first
+        if re.search(r'[\u4e00-\u9fff]', text):
+            return "zh-cn"
+        
         detected = detect(text)
+        # Map common Chinese language codes
+        if detected in ['zh', 'zh-cn', 'zh-tw']:
+            return "zh-cn"
+        
         return LANG_CODES.get(detected.lower(), "en")
     except Exception:
+        # Fallback: check for Chinese characters
+        if re.search(r'[\u4e00-\u9fff]', text):
+            return "zh-cn"
         return "en"
 
 # =============================
@@ -139,7 +157,7 @@ COURSES = {
             "Semester 7": ["Advanced AI", "Data Analytics", "Elective 3", "Project II"],
             "Semester 8": ["Capstone Project", "Internship", "Industry Seminars", "Elective 4"]
         },
-        "keywords": ["computer", "cs", "programming", "software", "coding"]
+        "keywords": ["computer", "cs", "programming", "software", "coding", "计算机", "编程", "软件"]
     },
     "information technology": {
         "description": "Information Technology focuses on applying technology to solve business problems. Emphasizes networking, system administration, and IT management.",
@@ -153,7 +171,7 @@ COURSES = {
             "Semester 5": ["Network Administration", "IT Strategy", "Elective 2", "Internship"],
             "Semester 6": ["Capstone Project", "Industry Training", "Advanced Topics", "Portfolio"]
         },
-        "keywords": ["it", "information technology", "networking", "systems"]
+        "keywords": ["it", "information technology", "networking", "systems", "信息技术", "网络"]
     },
     "business": {
         "description": "Business studies prepare students for management roles. Covers finance, marketing, operations, and strategic management.",
@@ -167,7 +185,7 @@ COURSES = {
             "Semester 5": ["Business Ethics", "Entrepreneurship", "Project Management", "Internship"],
             "Semester 6": ["Capstone Project", "Industry Seminar", "Portfolio", "Elective 3"]
         },
-        "keywords": ["business", "management", "marketing", "finance", "mba"]
+        "keywords": ["business", "management", "marketing", "finance", "mba", "商业", "管理", "营销"]
     },
     "engineering": {
         "description": "Engineering programs develop problem-solving, design, and technical skills across various fields such as mechanical, electrical, or civil engineering.",
@@ -183,7 +201,7 @@ COURSES = {
             "Semester 7": ["Advanced Topics", "Research Methods", "Specialization 3", "Thesis 1"],
             "Semester 8": ["Capstone Project", "Professional Practice", "Thesis 2", "Seminar"]
         },
-        "keywords": ["engineering", "mechanical", "civil", "electrical"]
+        "keywords": ["engineering", "mechanical", "civil", "electrical", "工程", "机械", "电气"]
     },
     "nursing": {
         "description": "Nursing programs prepare students to provide healthcare, patient care, and clinical support. Aims include patient safety, clinical skills, and health assessment.",
@@ -199,7 +217,7 @@ COURSES = {
             "Semester 7": ["Advanced Practice", "Case Management", "Clinical Practicum 5", "Professional Development"],
             "Semester 8": ["Capstone Project", "Comprehensive Exam", "Final Practicum", "Transition to Practice"]
         },
-        "keywords": ["nursing", "healthcare", "clinical", "patient", "medical"]
+        "keywords": ["nursing", "healthcare", "clinical", "patient", "medical", "护理", "医疗", "临床"]
     }
 }
 
@@ -262,7 +280,7 @@ def log_interaction(user_text, detected_lang, translated_input, bot_reply, confi
 # Enhanced Response Generation
 # =============================
 def get_enhanced_response(user_input, detected_lang="en"):
-    """Enhanced response generation with better context handling"""
+    """Enhanced response generation with better multilingual support"""
     try:
         # Validate input
         user_input = validate_input(user_input)
@@ -272,25 +290,25 @@ def get_enhanced_response(user_input, detected_lang="en"):
         
         fallback_responses = {
             "en": "I'm sorry, I don't have information about that. Could you please rephrase your question or ask about our courses, admissions, fees, or facilities?",
-            "zh-CN": "抱歉，我没有相关信息。您能重新表达您的问题或询问我们的课程、入学、费用或设施吗？"
+            "zh-cn": "抱歉，我没有相关信息。您能重新表达您的问题或询问我们的课程、入学、费用或设施吗？"
         }
         
-        # Translate input if needed
+        # Intent classification on original input first (for better multilingual support)
+        intent = classify_intent_multilingual(user_input, detected_lang)
+        
+        # Translate input if needed for KB matching
         translated_input = user_input
         if detected_lang != "en":
             translated_input = safe_translate(user_input, "en", detected_lang)
         
         user_input_lower = translated_input.lower()
         
-        # Intent classification
-        intent = classify_intent(user_input_lower)
-        
         # Handle different intents
         if intent == "greeting":
             response = handle_greeting(detected_lang)
             confidence = 1.0
         elif intent == "course_inquiry":
-            response, confidence = handle_course_inquiry(user_input_lower, detected_lang)
+            response, confidence = handle_course_inquiry(user_input_lower, detected_lang, user_input)
         elif intent == "fees":
             response, confidence = handle_fees_inquiry(user_input_lower, detected_lang)
         elif intent == "time":
@@ -310,44 +328,68 @@ def get_enhanced_response(user_input, detected_lang="en"):
         return response, confidence, translated_input, intent
         
     except Exception as e:
-        return "I apologize, but I encountered an error. Please try again.", 0.0, user_input, "error"
+        error_msg = {
+            "en": "I apologize, but I encountered an error. Please try again.",
+            "zh-cn": "抱歉，我遇到了错误。请重试。"
+        }
+        return error_msg.get(detected_lang, error_msg["en"]), 0.0, user_input, "error"
 
-def classify_intent(user_input):
-    """Classify user intent"""
-    greetings = ["hello", "hi", "hey", "good morning", "good afternoon"]
-    course_keywords = ["course", "program", "study", "curriculum", "syllabus", "major"]
-    fee_keywords = ["fee", "cost", "price", "tuition", "payment", "money"]
-    time_keywords = ["time", "when", "schedule", "calendar", "hours"]
+def classify_intent_multilingual(user_input, detected_lang):
+    """Enhanced multilingual intent classification"""
+    user_input_lower = user_input.lower()
     
-    if any(word in user_input for word in greetings):
+    # Check for greetings in the detected language first
+    if detected_lang in GREETING_PATTERNS:
+        if any(greeting in user_input_lower for greeting in GREETING_PATTERNS[detected_lang]):
+            return "greeting"
+    
+    # Fallback to English patterns
+    if any(greeting in user_input_lower for greeting in GREETING_PATTERNS["en"]):
         return "greeting"
-    elif any(word in user_input for word in course_keywords):
+    
+    # Course-related keywords (multilingual)
+    course_keywords = ["course", "program", "study", "curriculum", "syllabus", "major", 
+                      "课程", "专业", "学习", "课表", "科目"]
+    if any(keyword in user_input_lower for keyword in course_keywords):
         return "course_inquiry"
-    elif any(word in user_input for word in fee_keywords):
+    
+    # Fee-related keywords (multilingual)
+    fee_keywords = ["fee", "cost", "price", "tuition", "payment", "money", 
+                   "费用", "学费", "价格", "付款", "钱"]
+    if any(keyword in user_input_lower for keyword in fee_keywords):
         return "fees"
-    elif any(word in user_input for word in time_keywords):
+    
+    # Time-related keywords (multilingual)
+    time_keywords = ["time", "when", "schedule", "calendar", "hours",
+                    "时间", "什么时候", "日程", "日历", "小时"]
+    if any(keyword in user_input_lower for keyword in time_keywords):
         return "time"
-    else:
-        return "general"
+    
+    return "general"
 
 def handle_greeting(lang):
     """Handle greeting with personalized response"""
     greetings = {
         "en": f"Hello! 👋 Welcome to our University. I'm here to help you with information about our courses, admissions, fees, and more. How can I assist you today?",
-        "zh-CN": "您好！👋 欢迎来到我们大学。我在这里为您提供有关课程、入学、费用等信息。今天我能为您做什么？"
+        "zh-cn": "您好！👋 欢迎来到我们大学。我在这里为您提供有关课程、入学、费用等信息。今天我能为您做什么？"
     }
     return greetings.get(lang, greetings["en"])
 
-def handle_course_inquiry(user_input, lang):
-    """Handle course-related inquiries"""
-    # Check for specific course mentions
+def handle_course_inquiry(user_input, lang, original_input=""):
+    """Handle course-related inquiries with better multilingual support"""
+    # Check for specific course mentions in both languages
     for course_name, course_data in COURSES.items():
-        if any(keyword in user_input for keyword in course_data["keywords"]):
+        # Check keywords in both translated and original input
+        if any(keyword in user_input for keyword in course_data["keywords"]) or \
+           any(keyword in original_input.lower() for keyword in course_data["keywords"]):
             response = f"📚 **{course_name.title()}**\n\n"
             response += f"**Description:** {course_data['description']}\n\n"
             response += f"**Duration:** {course_data['duration']}\n\n"
             response += f"**Career Prospects:** {', '.join(course_data['career_prospects'])}\n\n"
             response += "Would you like to know more about the curriculum or admission requirements?"
+            
+            # Store current course for context
+            st.session_state.current_course = course_name
             return response, 0.9
     
     # General course information
@@ -361,10 +403,10 @@ def handle_fees_inquiry(user_input, lang):
     """Handle fee-related inquiries"""
     course = st.session_state.current_course
     
-    if "international" in user_input:
+    if "international" in user_input or "国际" in user_input:
         student_type = "international"
         fee = "RM 15,000"
-    elif "domestic" in user_input or "local" in user_input:
+    elif "domestic" in user_input or "local" in user_input or "本地" in user_input:
         student_type = "domestic"
         fee = "RM 10,000"
     else:
@@ -387,7 +429,7 @@ def handle_time_query(lang):
     current_time = datetime.datetime.now()
     responses = {
         "en": f"🕒 Current time: {current_time.strftime('%I:%M %p')} on {current_time.strftime('%B %d, %Y')}",
-        "zh-CN": f"🕒 当前时间：{current_time.strftime('%Y年%m月%d日 %H:%M')}"
+        "zh-cn": f"🕒 当前时间：{current_time.strftime('%Y年%m月%d日 %H:%M')}"
     }
     return responses.get(lang, responses["en"])
 
