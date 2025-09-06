@@ -79,7 +79,6 @@ def find_best_matches(user_input, questions, threshold=0.4):
     return matches
 
 def get_csv_response(user_input, detected_lang="en"):
-    # Fallback messages
     fallback_response = "Sorry, I don’t know that yet. Please contact the admin office." \
                         if detected_lang=="en" else "抱歉，我还不知道。请联系管理办公室。"
     try:
