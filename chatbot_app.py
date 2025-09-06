@@ -160,6 +160,8 @@ if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())[:8]
 if "course_pending" not in st.session_state:
     st.session_state.course_pending = None
+if "current_course" not in st.session_state:
+    st.session_state.current_course = None
 
 # =============================
 # Get response
@@ -181,6 +183,7 @@ def get_csv_response(user_input, detected_lang="en"):
         if user_input_lower in ["yes", "y", "是"]:
             course = st.session_state.course_pending
             st.session_state.course_pending = None
+            st.session_state.current_course = course
             if course in COURSES:
                 syllabus = COURSES[course]["curriculum"]
                 response = ""
@@ -195,7 +198,21 @@ def get_csv_response(user_input, detected_lang="en"):
     # 2. Tuition / fee keywords
     tuition_keywords = ["fee", "fees", "tuition", "tuition fee", "application fee"]
     if any(word in user_input_lower for word in tuition_keywords):
-        response = "The tuition fees are RM 15,000 per semester for international students."
+        course = st.session_state.current_course
+        if course:
+            if "international" in user_input_lower:
+                response = f"The tuition fees for {course.title()} are RM 15,000 per semester for international students."
+            elif "domestic" in user_input_lower or "local" in user_input_lower:
+                response = f"The tuition fees for {course.title()} are RM 10,000 per semester for domestic students."
+            else:
+                response = f"The tuition fees for {course.title()} are RM 10,000 per semester for domestic students and RM 15,000 per semester for international students."
+        else:
+            if "international" in user_input_lower:
+                response = "Tuition fees are RM 15,000 per semester for international students."
+            elif "domestic" in user_input_lower or "local" in user_input_lower:
+                response = "Tuition fees are RM 10,000 per semester for domestic students."
+            else:
+                response = "Tuition fees are RM 10,000 per semester for domestic students and RM 15,000 per semester for international students."
         if detected_lang == "zh-CN":
             response = GoogleTranslator(source="en", target="zh-CN").translate(response)
         return response, 1.0, translated_input
@@ -365,6 +382,7 @@ with st.sidebar:
     if st.button("🗑️ Clear Chat"):
         st.session_state.history = []
         st.session_state.course_pending = None
+        st.session_state.current_course = None
 
 st.markdown("""
 <style>
