@@ -79,41 +79,44 @@ def find_best_matches(user_input, questions, threshold=0.4):
     return matches
 
 def get_csv_response(user_input, detected_lang="en"):
-    fallback_response = "Sorry, I don’t know that yet. Please contact the admin office." \
-                        if detected_lang=="en" else "抱歉，我还不知道。请联系管理办公室。"
+    # Define fallback messages per language
+    fallback_response = {
+        "en": "Sorry, I don’t know that yet. Please contact the admin office.",
+        "zh-CN": "抱歉，我还不知道。请联系管理办公室。"
+    }
+
     try:
         # Translate Chinese input to English for matching
         translated_input = user_input
         if detected_lang == "zh-CN":
             translated_input = GoogleTranslator(source="zh-CN", target="en").translate(user_input)
 
+        # Fuzzy match in English KB
         questions = knowledge_base["question"].tolist()
         matches = find_best_matches(translated_input, questions, threshold=0.4)
 
         if matches:
+            # Collect unique answers
             answers = set()
             for matched_q, ratio in matches:
                 mask = knowledge_base["question"].str.contains(matched_q, case=False)
                 if mask.any():
                     answers.add(knowledge_base.loc[mask, "answer"].values[0])
-            if answers:
-                response = "\n• " + "\n• ".join(answers)
-            else:
-                response = fallback_response
+            response = "\n• " + "\n• ".join(answers) if answers else fallback_response[detected_lang]
             confidence = matches[0][1]
         else:
-            response = fallback_response
+            response = fallback_response[detected_lang]
             confidence = 0.0
 
-        # Translate back to Chinese if needed
-        if detected_lang == "zh-CN":
+        # Only translate if the user is Chinese and response is in English
+        if detected_lang == "zh-CN" and response == fallback_response["en"]:
             response = GoogleTranslator(source="en", target="zh-CN").translate(response)
 
         return response, confidence, translated_input
 
     except Exception as e:
         print("Error in get_csv_response:", e)
-        return fallback_response, 0.0, user_input
+        return fallback_response[detected_lang], 0.0, user_input
 
 # =============================
 # Session state
