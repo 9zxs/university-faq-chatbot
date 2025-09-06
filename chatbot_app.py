@@ -1,20 +1,19 @@
 import streamlit as st
-import joblib, json, random, datetime, uuid
+import json, random, datetime, uuid
 from pathlib import Path
 from deep_translator import GoogleTranslator
 from langdetect import detect
 import pandas as pd
 import plotly.express as px
+from difflib import get_close_matches
 
 # =============================
 # File paths
 # =============================
 BASE_DIR = Path(__file__).resolve().parent
-INTENTS_PATH = BASE_DIR / "data" / "intents.json"
-MODEL_PATH = BASE_DIR / "model.joblib"
+KB_PATH = BASE_DIR / "data" / "knowledge_base.csv"
 LOG_PATH = BASE_DIR / "data" / "chat_logs.json"
 FEEDBACK_PATH = BASE_DIR / "data" / "feedback.json"
-CSV_PATH = BASE_DIR / "data" / "knowledge_base.csv"   # 🔹 new CSV file
 
 # =============================
 # Supported languages
@@ -26,26 +25,13 @@ SUPPORTED_LANGS = {
 }
 
 # =============================
-# Load model, intents, CSV
+# Load knowledge base
 # =============================
 @st.cache_resource
-def load_model():
-    return joblib.load(MODEL_PATH)
+def load_knowledge_base():
+    return pd.read_csv(KB_PATH)
 
-@st.cache_resource
-def load_intents():
-    with open(INTENTS_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["intents"]
-
-@st.cache_resource
-def load_csv_knowledge():
-    if CSV_PATH.exists():
-        return pd.read_csv(CSV_PATH)
-    return pd.DataFrame(columns=["question", "answer"])
-
-clf = load_model()
-intents = load_intents()
-csv_knowledge = load_csv_knowledge()
+knowledge_base = load_knowledge_base()
 
 # =============================
 # Utils
@@ -60,25 +46,13 @@ def translate_text(text, target_lang):
     except Exception:
         return text
 
-def search_csv_knowledge(user_text: str):
-    """Check CSV knowledge base first with placeholders."""
-    for _, row in csv_knowledge.iterrows():
-        if str(row["question"]).lower() in user_text.lower():
-            answer = row["answer"]
-            # 🔹 Replace placeholders
-            answer = answer.replace("{{date}}", datetime.date.today().strftime("%Y-%m-%d"))
-            answer = answer.replace("{{time}}", datetime.datetime.now().strftime("%H:%M:%S"))
-            return answer
-    return None
-
-def log_interaction(user_text, detected_lang, translated_input, predicted_tag, bot_reply, confidence):
+def log_interaction(user_text, detected_lang, translated_input, bot_reply, confidence):
     log_entry = {
         "timestamp": datetime.datetime.now().isoformat(),
         "session_id": st.session_state.session_id,
         "user_text": user_text,
         "detected_lang": detected_lang,
         "translated_input": translated_input,
-        "predicted_tag": predicted_tag,
         "bot_reply": bot_reply,
         "confidence": confidence
     }
@@ -90,20 +64,34 @@ def log_interaction(user_text, detected_lang, translated_input, predicted_tag, b
     with open(LOG_PATH, "w", encoding="utf-8") as f:
         json.dump(logs, f, indent=2)
 
-def get_contextual_response(tag, user_input, conversation_context, detected_lang="en"):
-    fallback_response = "Sorry, I didn't quite get that. Could you rephrase?"
+def get_csv_response(user_input, detected_lang="en"):
+    fallback_response = "Sorry, I don’t know that yet. Please contact the admin office."
     response = fallback_response
+    confidence = 0.0
 
-    for intent in intents:
-        if tag == intent.get("tag") or tag == intent.get("intent"):
-            if "responses" in intent:
-                if isinstance(intent["responses"], list):
-                    response = random.choice(intent["responses"])
-            break
+    try:
+        # Translate input to English for matching
+        translated_input = user_input
+        if detected_lang != "en":
+            translated_input = GoogleTranslator(source=detected_lang, target="en").translate(user_input)
 
-    # ✅ Translate response to user's language if needed
-    response = translate_text(response, detected_lang)
-    return response
+        questions = knowledge_base["question"].tolist()
+        matches = get_close_matches(translated_input.lower(), [q.lower() for q in questions], n=1, cutoff=0.6)
+
+        if matches:
+            matched_q = matches[0]
+            answer = knowledge_base.loc[knowledge_base["question"].str.lower() == matched_q, "answer"].values[0]
+            response = answer
+            confidence = 1.0
+        else:
+            response = fallback_response
+
+        # Translate back to user’s language if needed
+        response = translate_text(response, detected_lang)
+        return response, confidence, translated_input
+
+    except Exception:
+        return fallback_response, 0.0, user_input
 
 # =============================
 # Session state
@@ -112,8 +100,6 @@ if "history" not in st.session_state:
     st.session_state.history = []
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())[:8]
-if "conversation_context" not in st.session_state:
-    st.session_state.conversation_context = []
 
 # =============================
 # Chatbot logic
@@ -123,52 +109,16 @@ def bot_reply(user_text):
     translated_input = user_text
     try:
         lang = detect(user_text)
-        detected_lang = SUPPORTED_LANGS.get(lang.lower(), "en")
+        detected_lang = SUPPORTED_LANGS.get(lang.lower(), "en")  # fallback to English
     except:
         detected_lang = "en"
 
-    # 🔹 Check CSV knowledge base first
-    csv_answer = search_csv_knowledge(user_text)
-    if csv_answer:
-        reply = translate_text(csv_answer, detected_lang)
-        st.session_state.history.append(("You", user_text))
-        st.session_state.history.append(("Bot", reply))
-        log_interaction(user_text, detected_lang, user_text, "csv_match", reply, 1.0)
-        st.session_state.input = ""
-        return
-
-    # Translate to English if needed for intent prediction
-    if detected_lang != "en":
-        try:
-            translated_input = GoogleTranslator(source=detected_lang, target="en").translate(user_text)
-        except:
-            translated_input = user_text
-
-    # Predict intent
-    try:
-        tag = clf.predict([translated_input.lower()])[0]
-        confidence = 0.7
-    except:
-        tag = "fallback"
-        confidence = 0.1
-
-    # Get response (English → translated if needed)
-    reply = get_contextual_response(tag, user_text, st.session_state.conversation_context, detected_lang)
-
-    # Update context
-    st.session_state.conversation_context.append({
-        "user": user_text,
-        "bot": reply,
-        "intent": tag,
-        "confidence": confidence
-    })
-    if len(st.session_state.conversation_context) > 5:
-        st.session_state.conversation_context.pop(0)
+    reply, confidence, translated_input = get_csv_response(user_text, detected_lang)
 
     # Save history
     st.session_state.history.append(("You", user_text))
     st.session_state.history.append(("Bot", reply))
-    log_interaction(user_text, detected_lang, translated_input, tag, reply, confidence)
+    log_interaction(user_text, detected_lang, translated_input, reply, confidence)
     st.session_state.input = ""
 
 # =============================
@@ -209,18 +159,17 @@ def show_analytics():
             return
         df = pd.DataFrame(logs)
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         with col1: st.metric("Total Conversations", len(df))
         with col2: st.metric("Unique Sessions", df['session_id'].nunique() if 'session_id' in df else "N/A")
-        with col3: st.metric("Avg Confidence", f"{df['confidence'].mean():.2f}" if 'confidence' in df else "0")
-        with col4: st.metric("Languages Used", df['detected_lang'].nunique() if 'detected_lang' in df else "N/A")
+        with col3: st.metric("Languages Used", df['detected_lang'].nunique() if 'detected_lang' in df else "N/A")
 
         col1, col2 = st.columns(2)
         with col1:
-            if 'predicted_tag' in df:
-                intent_counts = df['predicted_tag'].value_counts()
-                fig = px.bar(x=intent_counts.index, y=intent_counts.values, title="Most Common Questions")
-                fig.update_layout(xaxis_title="Intent", yaxis_title="Count")
+            if 'bot_reply' in df:
+                reply_counts = df['bot_reply'].value_counts()
+                fig = px.bar(x=reply_counts.index, y=reply_counts.values, title="Most Common Answers")
+                fig.update_layout(xaxis_title="Answer", yaxis_title="Count")
                 st.plotly_chart(fig, use_container_width=True)
         with col2:
             if 'detected_lang' in df:
@@ -229,7 +178,7 @@ def show_analytics():
                 st.plotly_chart(fig, use_container_width=True)
 
         st.subheader("Recent Conversations")
-        recent_df = df.tail(10)[['timestamp', 'user_text', 'predicted_tag', 'confidence']].copy()
+        recent_df = df.tail(10)[['timestamp', 'user_text', 'bot_reply', 'confidence']].copy()
         if 'confidence' in recent_df:
             recent_df['confidence'] = recent_df['confidence'].round(2)
         st.dataframe(recent_df, use_container_width=True)
@@ -247,17 +196,16 @@ with col1:
         st.image(str(logo_path), width=80)
 with col2:
     st.title("🎓 University FAQ Chatbot")
-    st.caption("Multilingual support: English • 中文")
+    st.caption("Multilingual support: English • 中文 • Malay")
 
 with st.sidebar:
     st.subheader("ℹ️ Info")
-    st.info("This AI chatbot helps answer questions about:\n• Admissions\n• Tuition & Scholarships\n• Exams\n• Library\n• Housing\n• Office Hours\n• CSV Knowledge")
+    st.info("This AI chatbot helps answer questions about:\n• Admissions\n• Tuition & Scholarships\n• Exams\n• Library\n• Housing\n• Office Hours")
     st.subheader("Session")
     st.text(f"Session ID: {st.session_state.session_id}")
     st.text(f"Messages: {len(st.session_state.history)}")
     if st.button("🗑️ Clear Chat"):
         st.session_state.history = []
-        st.session_state.conversation_context = []
 
 # CSS styling
 st.markdown("""
@@ -265,8 +213,8 @@ st.markdown("""
         .chat-container {
             display: flex;
             flex-direction: column;
-            height: 300px;
-            overflow-y: auto;
+            height: 300px;          
+            overflow-y: auto;       
             border: 1px solid #ddd;
             padding: 10px;
             border-radius: 10px;
@@ -292,12 +240,14 @@ st.markdown("""
 # Chat and Analytics Tabs
 tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
 with tab1:
+    # Build the conversation HTML
     chat_html = '<div class="chat-container" id="chat-box">'
     for speaker, msg in st.session_state.history:
         bubble_class = "user-bubble" if speaker == "You" else "bot-bubble"
         chat_html += f'<div class="{bubble_class}">{speaker}: {msg}</div>'
     chat_html += '</div>'
 
+    # Auto-scroll
     chat_html += """
         <script>
             var chatBox = document.getElementById('chat-box');
@@ -309,6 +259,7 @@ with tab1:
 
     st.markdown(chat_html, unsafe_allow_html=True)
 
+    # Input field
     st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
 
 with tab2:
