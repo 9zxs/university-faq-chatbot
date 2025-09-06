@@ -170,7 +170,6 @@ def get_csv_response(user_input, detected_lang="en"):
         "zh-CN": "抱歉，我还不知道。请联系管理办公室。"
     }
 
-    # Translate input to English for consistent matching
     translated_input = user_input
     if detected_lang == "zh-CN":
         translated_input = GoogleTranslator(source="zh-CN", target="en").translate(user_input)
@@ -182,26 +181,35 @@ def get_csv_response(user_input, detected_lang="en"):
             course = st.session_state.course_pending
             st.session_state.course_pending = None
             if course in COURSES:
-                syllabus = COURSES[course]["curriculum"]
-                response = f"Here is the curriculum for the {course.title()} course:\n"
-                for sem, subjects in syllabus.items():
+                curriculum = COURSES[course]["curriculum"]
+                response = ""
+                for sem, subjects in curriculum.items():
                     response += f"{sem}: {', '.join(subjects)}\n"
                 return response.strip(), 1.0, translated_input
         else:
             st.session_state.course_pending = None
 
-    # 2. Map keywords to courses
+    # 2. Fuzzy match with course keywords
+    best_ratio = 0
+    matched_course = None
+    for course_name, course_data in COURSES.items():
+        for keyword in course_data["keywords"]:
+            ratio = SequenceMatcher(None, user_input_lower, keyword).ratio()
+            if ratio > best_ratio:
+                best_ratio = ratio
+                matched_course = course_name
+
+    if best_ratio >= 0.6:  # threshold for recognizing course-related input
+        st.session_state.course_pending = matched_course
+        return f"Do you mean the '{matched_course.title()}' course?", 1.0, translated_input
+
+    # 3. Check KEYWORD_MAP
     mapped_q = KEYWORD_MAP.get(user_input_lower, user_input_lower)
     if mapped_q in COURSES:
-        # Check if the user is asking "what is" or "what can I learn" type question
-        if any(word in user_input_lower for word in ["what is", "definition", "aim", "goal", "learn", "study"]):
-            description = COURSES[mapped_q]["description"]
-            return f"{mapped_q.title()} Course: {description}", 1.0, translated_input
-        else:
-            st.session_state.course_pending = mapped_q
-            return f"Do you mean the '{mapped_q.title()}' course?", 1.0, translated_input
+        st.session_state.course_pending = mapped_q
+        return f"Do you mean the '{mapped_q.title()}' course?", 1.0, translated_input
 
-    # 3. Fuzzy match with CSV knowledge base
+    # 4. Fuzzy match CSV knowledge base
     questions = knowledge_base["question"].tolist()
     matches = find_best_matches(translated_input, questions, threshold=0.3)
     if matches:
