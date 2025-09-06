@@ -95,14 +95,17 @@ def get_csv_response(user_input, detected_lang="en"):
         matches = find_best_matches(translated_input, questions, threshold=0.4)
 
         if matches:
-            # Collect all matching answers (multi-keyword support)
-            answers = []
+            # Collect all unique matching answers
+            answers = set()  # Use set to remove duplicates
             for matched_q, ratio in matches:
                 mask = knowledge_base["question"].str.contains(matched_q, case=False)
                 if mask.any():
                     answer = knowledge_base.loc[mask, "answer"].values[0]
-                    answers.append(answer)
-            response = " | ".join(answers)  # Combine multiple answers
+                    answers.add(answer)  # add to set (no duplicates)
+            if answers:
+                response = " | ".join(answers)  # Combine multiple answers
+            else:
+                response = fallback_response
             confidence = matches[0][1]
         else:
             response = fallback_response
