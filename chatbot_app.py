@@ -79,7 +79,6 @@ def find_best_matches(user_input, questions, threshold=0.4):
     return matches
 
 def get_csv_response(user_input, detected_lang="en"):
-    # Define fallback messages per language
     fallback_response = {
         "en": "Sorry, I don’t know that yet. Please contact the admin office.",
         "zh-CN": "抱歉，我还不知道。请联系管理办公室。"
@@ -131,7 +130,6 @@ if "session_id" not in st.session_state:
 # =============================
 def bot_reply(user_text):
     detected_lang = "en"
-    translated_input = user_text
     try:
         lang = detect(user_text)
         detected_lang = SUPPORTED_LANGS.get(lang.lower(), "en")
@@ -144,16 +142,17 @@ def bot_reply(user_text):
     if user_text.lower() in greetings_en or user_text in greetings_zh:
         reply = "Hello! How can I help you?" if detected_lang=="en" else "您好！我能帮您什么吗？"
         confidence = 1.0
-    # Time query
-    elif "time" in user_text.lower() or "时间" in user_text:
+    # Explicit time query (exact match)
+    elif user_text.lower() in ["time", "what time is it"] or user_text in ["时间", "现在几点"]:
         reply = f"The current time is {datetime.datetime.now().strftime('%H:%M:%S')}." if detected_lang=="en" else f"当前时间是 {datetime.datetime.now().strftime('%H:%M:%S')}。"
         confidence = 1.0
     else:
-        reply, confidence, translated_input = get_csv_response(user_text, detected_lang)
+        reply, confidence, _ = get_csv_response(user_text, detected_lang)
 
+    # Save conversation
     st.session_state.history.append(("You", user_text))
     st.session_state.history.append(("Bot", reply))
-    log_interaction(user_text, detected_lang, translated_input, reply, confidence)
+    log_interaction(user_text, detected_lang, user_text, reply, confidence)
     st.session_state.input = ""
 
 # =============================
