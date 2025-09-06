@@ -29,7 +29,10 @@ SUPPORTED_LANGS = {
 # =============================
 @st.cache_resource
 def load_knowledge_base():
-    return pd.read_csv(KB_PATH)
+    df = pd.read_csv(KB_PATH)
+    # Normalize questions
+    df["question"] = df["question"].str.strip().str.lower()
+    return df
 
 knowledge_base = load_knowledge_base()
 
@@ -67,16 +70,17 @@ def log_interaction(user_text, detected_lang, translated_input, bot_reply, confi
 # =============================
 # Response Matching
 # =============================
-def find_best_match(user_input, questions):
+def find_best_matches(user_input, questions, threshold=0.4):
+    """Return list of questions from KB that match user_input above threshold."""
     user_input_lower = user_input.lower()
-    best_ratio = 0
-    best_match = None
+    matches = []
     for q in questions:
-        ratio = SequenceMatcher(None, user_input_lower, q.lower()).ratio()
-        if ratio > best_ratio:
-            best_ratio = ratio
-            best_match = q
-    return best_match, best_ratio
+        ratio = SequenceMatcher(None, user_input_lower, q).ratio()
+        if ratio >= threshold:
+            matches.append((q, ratio))
+    # Sort by highest similarity first
+    matches.sort(key=lambda x: x[1], reverse=True)
+    return matches
 
 def get_csv_response(user_input, detected_lang="en"):
     fallback_response = "Sorry, I don’t know that yet. Please contact the admin office."
@@ -86,16 +90,20 @@ def get_csv_response(user_input, detected_lang="en"):
         if detected_lang != "en":
             translated_input = GoogleTranslator(source=detected_lang, target="en").translate(user_input)
 
-        # Extract all questions from KB
         questions = knowledge_base["question"].tolist()
 
-        # Find best match using SequenceMatcher
-        matched_q, match_ratio = find_best_match(translated_input, questions)
+        matches = find_best_matches(translated_input, questions, threshold=0.4)
 
-        if matched_q and match_ratio > 0.4:  # lower threshold for partial matches
-            answer = knowledge_base.loc[knowledge_base["question"].str.lower() == matched_q.lower(), "answer"].values[0]
-            response = answer
-            confidence = match_ratio
+        if matches:
+            # Collect all matching answers (multi-keyword support)
+            answers = []
+            for matched_q, ratio in matches:
+                mask = knowledge_base["question"].str.contains(matched_q, case=False)
+                if mask.any():
+                    answer = knowledge_base.loc[mask, "answer"].values[0]
+                    answers.append(answer)
+            response = " | ".join(answers)  # Combine multiple answers
+            confidence = matches[0][1]
         else:
             response = fallback_response
             confidence = 0.0
@@ -142,7 +150,7 @@ def bot_reply(user_text):
     else:
         reply, confidence, translated_input = get_csv_response(user_text, detected_lang)
 
-    # Save history and log
+    # Save to history and log
     st.session_state.history.append(("You", user_text))
     st.session_state.history.append(("Bot", reply))
     log_interaction(user_text, detected_lang, translated_input, reply, confidence)
@@ -267,26 +275,18 @@ st.markdown("""
 # Chat and Analytics Tabs
 tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
 with tab1:
-    # Build the conversation HTML
     chat_html = '<div class="chat-container" id="chat-box">'
     for speaker, msg in st.session_state.history:
         bubble_class = "user-bubble" if speaker == "You" else "bot-bubble"
         chat_html += f'<div class="{bubble_class}">{speaker}: {msg}</div>'
     chat_html += '</div>'
-
-    # Auto-scroll
     chat_html += """
         <script>
             var chatBox = document.getElementById('chat-box');
-            if (chatBox) {
-                chatBox.scrollTop = chatBox.scrollHeight;
-            }
+            if (chatBox) { chatBox.scrollTop = chatBox.scrollHeight; }
         </script>
     """
-
     st.markdown(chat_html, unsafe_allow_html=True)
-
-    # Input field
     st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
 
 with tab2:
