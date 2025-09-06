@@ -79,24 +79,26 @@ def find_best_matches(user_input, questions, threshold=0.4):
     return matches
 
 def get_csv_response(user_input, detected_lang="en"):
-    fallback_response = "Sorry, I don’t know that yet. Please contact the admin office." if detected_lang=="en" else "抱歉，我还不知道。请联系管理办公室。"
+    # Fallback messages
+    fallback_response = "Sorry, I don’t know that yet. Please contact the admin office." \
+                        if detected_lang=="en" else "抱歉，我还不知道。请联系管理办公室。"
     try:
-        # Translate to English for matching
+        # Translate Chinese input to English for matching
         translated_input = user_input
-        if detected_lang != "en":
-            translated_input = GoogleTranslator(source=detected_lang, target="en").translate(user_input)
+        if detected_lang == "zh-CN":
+            translated_input = GoogleTranslator(source="zh-CN", target="en").translate(user_input)
 
         questions = knowledge_base["question"].tolist()
         matches = find_best_matches(translated_input, questions, threshold=0.4)
 
         if matches:
-            answers = set()  # deduplicate
+            answers = set()
             for matched_q, ratio in matches:
                 mask = knowledge_base["question"].str.contains(matched_q, case=False)
                 if mask.any():
                     answers.add(knowledge_base.loc[mask, "answer"].values[0])
             if answers:
-                response = "\n• " + "\n• ".join(answers)  # bullet points
+                response = "\n• " + "\n• ".join(answers)
             else:
                 response = fallback_response
             confidence = matches[0][1]
@@ -104,7 +106,10 @@ def get_csv_response(user_input, detected_lang="en"):
             response = fallback_response
             confidence = 0.0
 
-        response = translate_text(response, detected_lang)
+        # Translate back to Chinese if needed
+        if detected_lang == "zh-CN":
+            response = GoogleTranslator(source="en", target="zh-CN").translate(response)
+
         return response, confidence, translated_input
 
     except Exception as e:
