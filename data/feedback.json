@@ -1,1 +1,72 @@
-
+[
+  {
+    "timestamp": "2025-09-06T14:10:00",
+    "session_id": "a1b2c3d4",
+    "rating": 5,
+    "comment": "Very helpful and informative!",
+    "conversation_length": 12
+  },
+  {
+    "timestamp": "2025-09-06T14:20:00",
+    "session_id": "e5f6g7h8",
+    "rating": 4,
+    "comment": "Good, but sometimes the answers are generic.",
+    "conversation_length": 8
+  },
+  {
+    "timestamp": "2025-09-06T14:30:00",
+    "session_id": "i9j0k1l2",
+    "rating": 3,
+    "comment": "Average experience, needs improvement.",
+    "conversation_length": 10
+  },
+  {
+    "timestamp": "2025-09-06T14:40:00",
+    "session_id": "m3n4o5p6",
+    "rating": 5,
+    "comment": "Loved the course info details!",
+    "conversation_length": 15
+  },
+  {
+    "timestamp": "2025-09-06T14:50:00",
+    "session_id": "q7r8s9t0",
+    "rating": 4,
+    "comment": "Good chatbot, but sometimes slow to respond.",
+    "conversation_length": 9
+  },
+  {
+    "timestamp": "2025-09-06T15:00:00",
+    "session_id": "u1v2w3x4",
+    "rating": 2,
+    "comment": "Not very accurate in answering tuition questions.",
+    "conversation_length": 7
+  },
+  {
+    "timestamp": "2025-09-06T15:10:00",
+    "session_id": "y5z6a7b8",
+    "rating": 5,
+    "comment": "Excellent! Easy to use and understand.",
+    "conversation_length": 13
+  },
+  {
+    "timestamp": "2025-09-06T15:20:00",
+    "session_id": "c9d0e1f2",
+    "rating": 3,
+    "comment": "It answered my questions, but not in my preferred language.",
+    "conversation_length": 11
+  },
+  {
+    "timestamp": "2025-09-06T15:30:00",
+    "session_id": "g3h4i5j6",
+    "rating": 4,
+    "comment": "Useful, especially for course details.",
+    "conversation_length": 10
+  },
+  {
+    "timestamp": "2025-09-06T15:40:00",
+    "session_id": "k7l8m9n0",
+    "rating": 5,
+    "comment": "Very responsive and friendly chatbot!",
+    "conversation_length": 14
+  }
+]
