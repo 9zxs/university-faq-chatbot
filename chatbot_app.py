@@ -413,5 +413,16 @@ with tab1:
 
     st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
 
+    # =============================
+    # Feedback Form
+    # =============================
+    st.subheader("💡 Feedback")
+    with st.form(key="feedback_form"):
+        rating = st.slider("Rate your experience with the chatbot:", min_value=1, max_value=5, value=5)
+        comment = st.text_area("Any comments or suggestions?", "")
+        submitted = st.form_submit_button("Submit Feedback")
+        if submitted:
+            save_feedback(rating, comment)
+
 with tab2:
     show_analytics()
