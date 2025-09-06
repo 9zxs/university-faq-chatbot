@@ -176,7 +176,7 @@ def get_csv_response(user_input, detected_lang="en"):
 
     user_input_lower = translated_input.lower()
 
-    # 1. If there is a pending course confirmation
+    # 1. Pending course confirmation
     if st.session_state.course_pending:
         if user_input_lower in ["yes", "y", "是"]:
             course = st.session_state.course_pending
@@ -192,7 +192,15 @@ def get_csv_response(user_input, detected_lang="en"):
         else:
             st.session_state.course_pending = None
 
-    # 2. Fuzzy match course keywords
+    # 2. Tuition / fee keywords
+    tuition_keywords = ["fee", "fees", "tuition", "tuition fee", "application fee"]
+    if any(word in user_input_lower for word in tuition_keywords):
+        response = "The tuition fees are RM 15,000 per semester for international students."
+        if detected_lang == "zh-CN":
+            response = GoogleTranslator(source="en", target="zh-CN").translate(response)
+        return response, 1.0, translated_input
+
+    # 3. Fuzzy match course keywords
     best_ratio = 0
     matched_course = None
     for course_name, course_data in COURSES.items():
@@ -201,15 +209,14 @@ def get_csv_response(user_input, detected_lang="en"):
             if ratio > best_ratio:
                 best_ratio = ratio
                 matched_course = course_name
-
-    if best_ratio >= 0.6:  # threshold for recognizing course-related input
+    if best_ratio >= 0.6:
         st.session_state.course_pending = matched_course
         response = f"Do you mean the '{matched_course.title()}' course?"
         if detected_lang == "zh-CN":
             response = GoogleTranslator(source="en", target="zh-CN").translate(response)
         return response, 1.0, translated_input
 
-    # 3. Check KEYWORD_MAP
+    # 4. Check KEYWORD_MAP
     mapped_q = KEYWORD_MAP.get(user_input_lower, user_input_lower)
     if mapped_q in COURSES:
         st.session_state.course_pending = mapped_q
@@ -218,7 +225,7 @@ def get_csv_response(user_input, detected_lang="en"):
             response = GoogleTranslator(source="en", target="zh-CN").translate(response)
         return response, 1.0, translated_input
 
-    # 4. Fuzzy match CSV knowledge base
+    # 5. Fuzzy match CSV knowledge base
     questions = knowledge_base["question"].tolist()
     matches = find_best_matches(translated_input, questions, threshold=0.3)
     if matches:
@@ -228,7 +235,7 @@ def get_csv_response(user_input, detected_lang="en"):
             answer = GoogleTranslator(source="en", target="zh-CN").translate(answer)
         return answer, matches[0][1], translated_input
 
-    # 5. Fallback
+    # 6. Fallback
     return fallback_response[detected_lang], 0.0, translated_input
 
 # =============================
