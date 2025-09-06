@@ -35,6 +35,56 @@ def load_knowledge_base():
 knowledge_base = load_knowledge_base()
 
 # =============================
+# Program/course responses
+# =============================
+PROGRAM_RESPONSES = {
+    "computer science": "Computer Science Program:\n"
+                        "Semester 1: Introduction to Programming, Mathematics for Computing, Computer Systems Fundamentals, Communication Skills.\n"
+                        "Semester 2: Data Structures, Object-Oriented Programming, Discrete Mathematics, Digital Logic Design.\n"
+                        "Semester 3: Algorithms, Database Systems, Web Development, Operating Systems Fundamentals.\n"
+                        "Semester 4: Software Engineering, Computer Networks, Human-Computer Interaction, Probability & Statistics.\n"
+                        "Semester 5: Artificial Intelligence, Mobile App Development, Cybersecurity Basics, Elective Module 1.\n"
+                        "Semester 6: Machine Learning, Cloud Computing, Elective Module 2, Project I.\n"
+                        "Semester 7: Advanced AI, Data Analytics, Elective Module 3, Project II.\n"
+                        "Semester 8: Capstone Project, Internship, Industry Seminars, Elective Module 4.",
+    "engineering": "Engineering Program:\n"
+                   "Semester 1: Mathematics I, Physics I, Introduction to Engineering, Engineering Drawing.\n"
+                   "Semester 2: Mathematics II, Physics II, Mechanics, Electrical Fundamentals.\n"
+                   "Semester 3: Thermodynamics, Materials Science, Circuit Analysis, Programming for Engineers.\n"
+                   "Semester 4: Fluid Mechanics, Electronics, Control Systems, Technical Communication.\n"
+                   "Semester 5: Mechanical Design, Embedded Systems, Environmental Engineering, Elective Module 1.\n"
+                   "Semester 6: Power Systems, Robotics, Instrumentation, Elective Module 2.\n"
+                   "Semester 7: Project Design, Industrial Training, Elective Module 3.\n"
+                   "Semester 8: Capstone Project, Professional Ethics, Industry Seminars.",
+    "business": "Business Administration Program:\n"
+                "Semester 1: Introduction to Business, Principles of Economics, Business Communication, IT for Business.\n"
+                "Semester 2: Financial Accounting, Microeconomics, Marketing Principles, Business Mathematics.\n"
+                "Semester 3: Managerial Accounting, Organizational Behavior, Business Law, Statistics for Business.\n"
+                "Semester 4: Operations Management, Macroeconomics, Human Resource Management, Elective Module 1.\n"
+                "Semester 5: Strategic Management, International Business, Entrepreneurship, Elective Module 2.\n"
+                "Semester 6: Finance Management, Marketing Management, Business Ethics, Elective Module 3.\n"
+                "Semester 7: Project Management, Internship, Elective Module 4.\n"
+                "Semester 8: Capstone Project, Industry Seminars, Leadership Development.",
+    "information technology": "Information Technology Program:\n"
+                              "Semester 1: Introduction to IT, Programming Fundamentals, Web Fundamentals, Digital Literacy.\n"
+                              "Semester 2: Data Structures, Computer Networks, Database Fundamentals, Object-Oriented Programming.\n"
+                              "Semester 3: Web Development, Mobile App Development, System Administration, Probability & Statistics.\n"
+                              "Semester 4: Cloud Computing, Cybersecurity Basics, Software Engineering, Elective Module 1.\n"
+                              "Semester 5: Artificial Intelligence, Machine Learning, Elective Module 2, Project I.\n"
+                              "Semester 6: Advanced Networking, Database Administration, Elective Module 3, Project II.\n"
+                              "Semester 7: Capstone Project, Internship, Industry Seminars, Elective Module 4.",
+    "nursing": "Nursing Program:\n"
+               "Semester 1: Anatomy & Physiology, Introduction to Nursing, Health Communication, Fundamentals of Care.\n"
+               "Semester 2: Pathophysiology, Pharmacology, Patient Care, Clinical Skills I.\n"
+               "Semester 3: Medical-Surgical Nursing I, Community Health, Psychology, Clinical Skills II.\n"
+               "Semester 4: Medical-Surgical Nursing II, Pediatric Nursing, Research Methods, Clinical Skills III.\n"
+               "Semester 5: Psychiatric Nursing, Obstetrics & Gynecology, Leadership & Management, Clinical Skills IV.\n"
+               "Semester 6: Advanced Nursing Practices, Evidence-Based Practice, Elective Module 1, Internship I.\n"
+               "Semester 7: Capstone Project, Internship II, Health Policy, Elective Module 2.\n"
+               "Semester 8: Professional Development, Clinical Seminar, Elective Module 3."
+}
+
+# =============================
 # Utils
 # =============================
 def translate_text(text, target_lang):
@@ -47,14 +97,14 @@ def translate_text(text, target_lang):
     except:
         return text
 
-def log_interaction(user_text, detected_lang, translated_input, bot_reply_text, confidence):
+def log_interaction(user_text, detected_lang, translated_input, bot_reply, confidence):
     log_entry = {
         "timestamp": datetime.datetime.now().isoformat(),
         "session_id": st.session_state.session_id,
         "user_text": user_text,
         "detected_lang": detected_lang,
         "translated_input": translated_input,
-        "bot_reply": bot_reply_text,
+        "bot_reply": bot_reply,
         "confidence": confidence
     }
     logs = []
@@ -68,7 +118,7 @@ def log_interaction(user_text, detected_lang, translated_input, bot_reply_text, 
 # =============================
 # Fuzzy matching
 # =============================
-def find_best_matches(user_input, questions, threshold=0.3):
+def find_best_matches(user_input, questions, threshold=0.4):
     user_input_lower = user_input.lower()
     matches = []
     for q in questions:
@@ -85,14 +135,21 @@ def get_csv_response(user_input, detected_lang="en"):
     }
 
     try:
-        # Translate to English if input is Chinese
         translated_input = user_input
         if detected_lang == "zh-CN":
             translated_input = GoogleTranslator(source="zh-CN", target="en").translate(user_input)
 
-        # Fuzzy match in CSV
+        # --- Check if input is a known program/course ---
+        for prog in PROGRAM_RESPONSES:
+            if prog in translated_input.lower():
+                response = PROGRAM_RESPONSES[prog]
+                confidence = 1.0
+                return response, confidence, translated_input
+
+        # --- Fuzzy match in CSV ---
         questions = knowledge_base["question"].tolist()
         matches = find_best_matches(translated_input, questions, threshold=0.3)
+
         if matches:
             matched_q = matches[0][0]
             answer = knowledge_base.loc[knowledge_base["question"].str.lower() == matched_q.lower(), "answer"].values[0]
@@ -102,11 +159,11 @@ def get_csv_response(user_input, detected_lang="en"):
             response = fallback_response[detected_lang]
             confidence = 0.0
 
-        # Translate back to Chinese if needed
         if detected_lang == "zh-CN" and response != fallback_response["zh-CN"]:
             response = GoogleTranslator(source="en", target="zh-CN").translate(response)
 
         return response, confidence, translated_input
+
     except Exception as e:
         print("Error in get_csv_response:", e)
         return fallback_response[detected_lang], 0.0, user_input
@@ -118,8 +175,6 @@ if "history" not in st.session_state:
     st.session_state.history = []
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())[:8]
-if "input" not in st.session_state:
-    st.session_state.input = ""
 
 # =============================
 # Bot reply
@@ -132,13 +187,11 @@ def bot_reply(user_text):
     except:
         detected_lang = "en"
 
-    # Greetings
     greetings_en = ["hi", "hello", "hey"]
     greetings_zh = ["你好", "嗨"]
     if user_text.lower() in greetings_en or user_text in greetings_zh:
         reply = "Hello! How can I help you?" if detected_lang=="en" else "您好！我能帮您什么吗？"
         confidence = 1.0
-    # Time query
     elif user_text.lower() in ["time", "what time is it"] or user_text in ["时间", "现在几点"]:
         reply = f"The current time is {datetime.datetime.now().strftime('%H:%M:%S')}." if detected_lang=="en" else f"当前时间是 {datetime.datetime.now().strftime('%H:%M:%S')}。"
         confidence = 1.0
@@ -187,6 +240,7 @@ def show_analytics():
             st.warning("No conversation data available yet.")
             return
         df = pd.DataFrame(logs)
+
         col1, col2, col3 = st.columns(3)
         with col1: st.metric("Total Conversations", len(df))
         with col2: st.metric("Unique Sessions", df['session_id'].nunique() if 'session_id' in df else "N/A")
@@ -235,7 +289,6 @@ with st.sidebar:
     if st.button("🗑️ Clear Chat"):
         st.session_state.history = []
 
-# Chat bubble styling with light/dark theme
 st.markdown("""
 <style>
 .chat-container { display: flex; flex-direction: column; height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 10px;}
@@ -247,23 +300,14 @@ st.markdown("""
 
 tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
 with tab1:
-    # Quick FAQ buttons
     st.subheader("Quick Questions")
-    faq_options = [
-        "Admissions", 
-        "Tuition", 
-        "Exams", 
-        "Library", 
-        "Housing", 
-        "Office Hours"
-    ]
+    faq_options = ["Admissions", "Tuition", "Exams", "Library", "Housing", "Office Hours"]
     cols = st.columns(len(faq_options))
     for i, option in enumerate(faq_options):
         if cols[i].button(option):
             st.session_state.input = option
             bot_reply(option)
 
-    # Chat history
     chat_html = '<div class="chat-container" id="chat-box">'
     for speaker, msg in st.session_state.history:
         bubble_class = "user-bubble" if speaker=="You" else "bot-bubble"
@@ -272,8 +316,7 @@ with tab1:
     chat_html += "<script>var chatBox=document.getElementById('chat-box');if(chatBox){chatBox.scrollTop=chatBox.scrollHeight;}</script>"
     st.markdown(chat_html, unsafe_allow_html=True)
 
-    # User input
     st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
-
+    
 with tab2:
     show_analytics()
