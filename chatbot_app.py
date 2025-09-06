@@ -5,7 +5,7 @@ from deep_translator import GoogleTranslator
 from langdetect import detect
 import pandas as pd
 import plotly.express as px
-from difflib import get_close_matches
+from difflib import SequenceMatcher
 
 # =============================
 # File paths
@@ -19,9 +19,9 @@ FEEDBACK_PATH = BASE_DIR / "data" / "feedback.json"
 # Supported languages
 # =============================
 SUPPORTED_LANGS = {
-    "en": "en",       # English
-    "ms": "ms",       # Malay
-    "zh-cn": "zh-CN"  # Chinese (Simplified)
+    "en": "en",
+    "ms": "ms",
+    "zh-cn": "zh-CN"
 }
 
 # =============================
@@ -64,33 +64,48 @@ def log_interaction(user_text, detected_lang, translated_input, bot_reply, confi
     with open(LOG_PATH, "w", encoding="utf-8") as f:
         json.dump(logs, f, indent=2)
 
+# =============================
+# Response Matching
+# =============================
+def find_best_match(user_input, questions):
+    user_input_lower = user_input.lower()
+    best_ratio = 0
+    best_match = None
+    for q in questions:
+        ratio = SequenceMatcher(None, user_input_lower, q.lower()).ratio()
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_match = q
+    return best_match, best_ratio
+
 def get_csv_response(user_input, detected_lang="en"):
     fallback_response = "Sorry, I don’t know that yet. Please contact the admin office."
-    response = fallback_response
-    confidence = 0.0
-
     try:
         # Translate input to English for matching
         translated_input = user_input
         if detected_lang != "en":
             translated_input = GoogleTranslator(source=detected_lang, target="en").translate(user_input)
 
+        # Extract all questions from KB
         questions = knowledge_base["question"].tolist()
-        matches = get_close_matches(translated_input.lower(), [q.lower() for q in questions], n=1, cutoff=0.6)
 
-        if matches:
-            matched_q = matches[0]
-            answer = knowledge_base.loc[knowledge_base["question"].str.lower() == matched_q, "answer"].values[0]
+        # Find best match using SequenceMatcher
+        matched_q, match_ratio = find_best_match(translated_input, questions)
+
+        if matched_q and match_ratio > 0.4:  # lower threshold for partial matches
+            answer = knowledge_base.loc[knowledge_base["question"].str.lower() == matched_q.lower(), "answer"].values[0]
             response = answer
-            confidence = 1.0
+            confidence = match_ratio
         else:
             response = fallback_response
+            confidence = 0.0
 
-        # Translate back to user’s language if needed
+        # Translate back to user language if needed
         response = translate_text(response, detected_lang)
         return response, confidence, translated_input
 
-    except Exception:
+    except Exception as e:
+        print("Error in get_csv_response:", e)
         return fallback_response, 0.0, user_input
 
 # =============================
@@ -102,20 +117,32 @@ if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())[:8]
 
 # =============================
-# Chatbot logic
+# Bot reply logic
 # =============================
 def bot_reply(user_text):
     detected_lang = "en"
     translated_input = user_text
     try:
         lang = detect(user_text)
-        detected_lang = SUPPORTED_LANGS.get(lang.lower(), "en")  # fallback to English
+        detected_lang = SUPPORTED_LANGS.get(lang.lower(), "en")
     except:
         detected_lang = "en"
 
-    reply, confidence, translated_input = get_csv_response(user_text, detected_lang)
+    # Handle greetings
+    greetings = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"]
+    if user_text.lower() in greetings:
+        reply = random.choice(["Hello! How can I help you?", "Hi there! What would you like to know?"])
+        confidence = 1.0
+        translated_input = user_text
+    # Handle dynamic time query
+    elif "time" in user_text.lower():
+        reply = f"The current time is {datetime.datetime.now().strftime('%H:%M:%S')}."
+        confidence = 1.0
+        translated_input = user_text
+    else:
+        reply, confidence, translated_input = get_csv_response(user_text, detected_lang)
 
-    # Save history
+    # Save history and log
     st.session_state.history.append(("You", user_text))
     st.session_state.history.append(("Bot", reply))
     log_interaction(user_text, detected_lang, translated_input, reply, confidence)
