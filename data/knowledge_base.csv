@@ -1,0 +1,6 @@
+question,answer
+date,Today's date is {{date}}.
+time,The current time is {{time}}.
+admission deadline,"The admission deadline is on June 30, 2025."
+library hours,"The library is open from 8 AM to 10 PM on weekdays, and 9 AM to 6 PM on weekends."
+office hours,"Our office hours are Monday to Friday, 9 AM to 5 PM."
