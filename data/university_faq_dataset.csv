@@ -499,4 +499,7 @@ IT support contact?,IT support is available via helpdesk@university.edu or call 
 campus medical center hours?,"The medical center is open Monday – Friday, 8 AM – 6 PM."
 exam schedule,"Final exams are held in December and June, depending on your semester."
 result release date?,Results are published within 4 weeks after the exam period.
+"courses","The university offers the following programs:\n• Computer Science\n• Business Administration\n• Psychology\n• Data Science\n• Environmental Science\n• Mechanical Engineering\n• Nursing\n• Architecture\n• Finance\n• Marketing"
+"available courses","The university offers the following programs:\n• Computer Science\n• Business Administration\n• Psychology\n• Data Science\n• Environmental Science\n• Mechanical Engineering\n• Nursing\n• Architecture\n• Finance\n• Marketing"
+"list of courses","You can enroll in these programs:\n• Computer Science\n• Business Administration\n• Psychology\n• Data Science\n• Environmental Science\n• Mechanical Engineering\n• Nursing\n• Architecture\n• Finance\n• Marketing"
 
