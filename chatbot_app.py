@@ -649,17 +649,20 @@ def chat_interface():
     # Chat display
     display_chat()
     
-    # Input area - Fixed to prevent loops
-    user_input = st.text_input(
-        "Type your message here...",
-        key="chat_input",
-        placeholder="Ask me about courses, admissions, fees, or any other university information..."
-    )
-    
-    # Process input only if it's different from last processed
-    if user_input and user_input != st.session_state.last_processed and not st.session_state.processing:
-        st.session_state.last_processed = user_input
-        process_user_input(user_input)
+    # Input area with form to handle submission properly
+    with st.form("chat_form", clear_on_submit=True):
+        user_input = st.text_input(
+            "Type your message here...",
+            placeholder="Ask me about courses, admissions, fees, or any other university information...",
+            key="user_message_input"
+        )
+        
+        submitted = st.form_submit_button("Send 📤", type="primary")
+        
+        # Process input when form is submitted
+        if submitted and user_input and user_input != st.session_state.last_processed and not st.session_state.processing:
+            st.session_state.last_processed = user_input
+            process_user_input(user_input)
 
 def display_chat():
     """Display chat history with enhanced formatting"""
