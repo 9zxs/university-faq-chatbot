@@ -166,8 +166,8 @@ if "course_pending" not in st.session_state:
 # =============================
 def get_csv_response(user_input, detected_lang="en"):
     fallback_response = {
-        "en": "Sorry, I don’t know that yet. Please contact the admin office.",
-        "zh-CN": "抱歉，我还不知道。请联系管理办公室。"
+        "en": "Sorry, I don’t know that yet. Please try more details questions.",
+        "zh-CN": "抱歉，我还不知道。请尝试更详细的提问。"
     }
 
     translated_input = user_input
