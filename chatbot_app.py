@@ -323,42 +323,68 @@ def save_feedback(rating, comment=""):
 # =============================
 def show_analytics():
     st.header("📊 Analytics Dashboard")
-    if not LOG_PATH.exists():
-        st.warning("No conversation data available yet.")
-        return
-    try:
+
+    # -----------------------------
+    # Load conversation logs
+    # -----------------------------
+    if LOG_PATH.exists():
         with open(LOG_PATH, "r", encoding="utf-8") as f:
             logs = json.load(f)
-        if not logs:
-            st.warning("No conversation data available yet.")
-            return
-        df = pd.DataFrame(logs)
+    else:
+        logs = []
 
-        col1, col2, col3 = st.columns(3)
-        with col1: st.metric("Total Conversations", len(df))
-        with col2: st.metric("Unique Sessions", df['session_id'].nunique() if 'session_id' in df else "N/A")
-        with col3: st.metric("Languages Used", df['detected_lang'].nunique() if 'detected_lang' in df else "N/A")
+    # -----------------------------
+    # Load feedback
+    # -----------------------------
+    if FEEDBACK_PATH.exists():
+        with open(FEEDBACK_PATH, "r", encoding="utf-8") as f:
+            feedback_data = json.load(f)
+    else:
+        feedback_data = []
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if 'bot_reply' in df:
-                reply_counts = df['bot_reply'].value_counts()
-                fig = px.bar(x=reply_counts.index, y=reply_counts.values, title="Most Common Answers")
-                fig.update_layout(xaxis_title="Answer", yaxis_title="Count")
-                st.plotly_chart(fig, use_container_width=True)
-        with col2:
-            if 'detected_lang' in df:
-                lang_counts = df['detected_lang'].value_counts()
-                fig = px.pie(values=lang_counts.values, names=lang_counts.index, title="Language Usage")
-                st.plotly_chart(fig, use_container_width=True)
+    # -----------------------------
+    # Display summary metrics
+    # -----------------------------
+    col1, col2, col3, col4 = st.columns(4)
+    with col1: st.metric("Total Conversations", len(logs))
+    with col2: st.metric("Unique Sessions", len(set([log.get("session_id") for log in logs])))
+    with col3: st.metric("Languages Used", len(set([log.get("detected_lang") for log in logs])))
+    with col4: st.metric("Feedback Entries", len(feedback_data))
 
+    # -----------------------------
+    # Conversation Analytics
+    # -----------------------------
+    if logs:
+        df_logs = pd.DataFrame(logs)
         st.subheader("Recent Conversations")
-        recent_df = df.tail(10)[['timestamp', 'user_text', 'bot_reply', 'confidence']].copy()
+        recent_df = df_logs.tail(10)[['timestamp', 'user_text', 'bot_reply', 'confidence']].copy()
         if 'confidence' in recent_df:
             recent_df['confidence'] = recent_df['confidence'].round(2)
         st.dataframe(recent_df, use_container_width=True)
-    except Exception as e:
-        st.error(f"Error loading analytics: {e}")
+
+    # -----------------------------
+    # Feedback Analytics
+    # -----------------------------
+    if feedback_data:
+        st.subheader("Feedback Overview")
+        df_feedback = pd.DataFrame(feedback_data)
+
+        # Ratings summary
+        st.markdown("**Ratings Distribution**")
+        rating_counts = df_feedback['rating'].value_counts().sort_index()
+        fig = px.bar(x=rating_counts.index, y=rating_counts.values, labels={'x':'Rating', 'y':'Count'}, title="Chatbot Ratings")
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Average rating
+        avg_rating = df_feedback['rating'].mean()
+        st.metric("Average Rating", f"{avg_rating:.2f} / 5")
+
+        # Comments
+        st.markdown("**Recent Comments**")
+        for idx, row in df_feedback.tail(5).iterrows():
+            st.markdown(f"- {row['comment']} (Rating: {row['rating']})")
+    else:
+        st.info("No feedback data available yet.")
 
 # =============================
 # App UI
