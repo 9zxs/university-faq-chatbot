@@ -1,25 +1,57 @@
 import streamlit as st
-import random
-import json
-import datetime
-import uuid
-import pandas as pd
+import joblib, json, random, datetime, uuid
 from pathlib import Path
-from googletrans import Translator
-import joblib
+from deep_translator import GoogleTranslator
+from langdetect import detect
+import pandas as pd
+import plotly.express as px
 
-# ==== Paths ====
-LOG_PATH = Path("chat_logs.json")
+# =============================
+# File paths
+# =============================
+BASE_DIR = Path(__file__).resolve().parent
+INTENTS_PATH = BASE_DIR / "data" / "intents.json"
+MODEL_PATH = BASE_DIR / "model.joblib"
+LOG_PATH = BASE_DIR / "data" / "chat_logs.json"
+FEEDBACK_PATH = BASE_DIR / "data" / "feedback.json"
 
-# ==== Load trained model and data ====
-model = joblib.load("intent_model.pkl")
-vectorizer = joblib.load("vectorizer.pkl")
-with open("intents.json", "r", encoding="utf-8") as f:
-    intents = json.load(f)
+# =============================
+# Supported languages
+# =============================
+SUPPORTED_LANGS = {
+    "en": "en",       # English
+    "ms": "ms",       # Malay
+    "zh-cn": "zh-CN"  # Chinese (Simplified)
+}
 
-translator = Translator()
+# =============================
+# Load model and intents
+# =============================
+@st.cache_resource
+def load_model():
+    return joblib.load(MODEL_PATH)
 
-# ==== Helper: Log user-bot interaction ====
+@st.cache_resource
+def load_intents():
+    with open(INTENTS_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)["intents"]
+
+clf = load_model()
+intents = load_intents()
+
+# =============================
+# Utils
+# =============================
+def translate_text(text, target_lang):
+    try:
+        if target_lang == "en":
+            return text
+        if target_lang in ["ms", "zh-CN"]:
+            return GoogleTranslator(source="en", target=target_lang).translate(text)
+        return text
+    except Exception:
+        return text
+
 def log_interaction(user_text, detected_lang, translated_input, predicted_tag, bot_reply, confidence):
     log_entry = {
         "timestamp": datetime.datetime.now().isoformat(),
@@ -39,91 +71,220 @@ def log_interaction(user_text, detected_lang, translated_input, predicted_tag, b
     with open(LOG_PATH, "w", encoding="utf-8") as f:
         json.dump(logs, f, indent=2)
 
-# ==== Predict intent ====
-def predict_intent(user_text):
-    X = vectorizer.transform([user_text])
-    probs = model.predict_proba(X)[0]
-    max_idx = probs.argmax()
-    confidence = probs[max_idx]
-    predicted_tag = model.classes_[max_idx]
-    return predicted_tag, confidence
+def get_contextual_response(tag, user_input, conversation_context, detected_lang="en"):
+    fallback_response = "Sorry, I didn't quite get that. Could you rephrase?"
+    response = fallback_response
 
-# ==== Chatbot response ====
-def get_response(user_text):
-    detected_lang = translator.detect(user_text).lang
-
-    # Translate input to English for intent classification
-    translated_input = translator.translate(user_text, src=detected_lang, dest="en").text
-    predicted_tag, confidence = predict_intent(translated_input)
-
-    # Default fallback
-    response = "Sorry, I didn't quite get that. Could you rephrase?"
-
-    for intent in intents["intents"]:
-        if intent["tag"] == predicted_tag:
-            response = random.choice(intent["responses"])
+    for intent in intents:
+        if tag == intent.get("tag") or tag == intent.get("intent"):
+            if "responses" in intent:
+                if isinstance(intent["responses"], list):
+                    response = random.choice(intent["responses"])
             break
 
-    # Translate bot response back to detected language
-    bot_reply = translator.translate(response, src="en", dest=detected_lang).text
+    # ✅ Translate response to user's language if needed
+    response = translate_text(response, detected_lang)
+    return response
 
-    # Save interaction
-    log_interaction(user_text, detected_lang, translated_input, predicted_tag, bot_reply, float(confidence))
-
-    return bot_reply
-
-# ==== UI ====
-st.set_page_config(page_title="University Chatbot", layout="wide")
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# =============================
+# Session state
+# =============================
+if "history" not in st.session_state:
+    st.session_state.history = []
 if "session_id" not in st.session_state:
-    st.session_state.session_id = str(uuid.uuid4())
+    st.session_state.session_id = str(uuid.uuid4())[:8]
+if "conversation_context" not in st.session_state:
+    st.session_state.conversation_context = []
 
-tabs = st.tabs(["💬 Chat", "📊 Analytics"])
+# =============================
+# Chatbot logic
+# =============================
+def bot_reply(user_text):
+    detected_lang = "en"
+    translated_input = user_text
+    try:
+        lang = detect(user_text)
+        detected_lang = SUPPORTED_LANGS.get(lang.lower(), "en")  # fallback to English
+    except:
+        detected_lang = "en"
 
-# ==== Tab 1: Chat ====
-with tabs[0]:
-    st.header("🎓 University FAQ Chatbot")
+    # Translate to English if needed for intent prediction
+    if detected_lang != "en":
+        try:
+            translated_input = GoogleTranslator(source=detected_lang, target="en").translate(user_text)
+        except:
+            translated_input = user_text
 
-    for msg in st.session_state.messages:
-        if msg["role"] == "user":
-            st.chat_message("user").write(msg["content"])
-        else:
-            st.chat_message("assistant").write(msg["content"])
+    # Predict intent
+    try:
+        tag = clf.predict([translated_input.lower()])[0]
+        confidence = 0.7
+    except:
+        tag = "fallback"
+        confidence = 0.1
 
-    if prompt := st.chat_input("Type your message here..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.write(prompt)
+    # Get response (English → translated if needed)
+    reply = get_contextual_response(tag, user_text, st.session_state.conversation_context, detected_lang)
 
-        response = get_response(prompt)
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        with st.chat_message("assistant"):
-            st.write(response)
+    # Update context
+    st.session_state.conversation_context.append({
+        "user": user_text,
+        "bot": reply,
+        "intent": tag,
+        "confidence": confidence
+    })
+    if len(st.session_state.conversation_context) > 5:
+        st.session_state.conversation_context.pop(0)
 
-# ==== Tab 2: Analytics ====
-with tabs[1]:
-    st.header("📊 Chat Analytics")
+    # Save history
+    st.session_state.history.append(("You", user_text))
+    st.session_state.history.append(("Bot", reply))
+    log_interaction(user_text, detected_lang, translated_input, tag, reply, confidence)
+    st.session_state.input = ""
 
-    if LOG_PATH.exists():
+# =============================
+# Feedback
+# =============================
+def save_feedback(rating, comment=""):
+    try:
+        feedback_data = []
+        if FEEDBACK_PATH.exists():
+            with open(FEEDBACK_PATH, "r", encoding="utf-8") as f:
+                feedback_data = json.load(f)
+        feedback_data.append({
+            "timestamp": datetime.datetime.now().isoformat(),
+            "session_id": st.session_state.session_id,
+            "rating": rating,
+            "comment": comment,
+            "conversation_length": len(st.session_state.history)
+        })
+        with open(FEEDBACK_PATH, "w", encoding="utf-8") as f:
+            json.dump(feedback_data, f, indent=2)
+        st.success("Thank you for your feedback! 🙏")
+    except Exception as e:
+        st.error(f"Error saving feedback: {e}")
+
+# =============================
+# Analytics
+# =============================
+def show_analytics():
+    st.header("📊 Analytics Dashboard")
+    if not LOG_PATH.exists():
+        st.warning("No conversation data available yet.")
+        return
+    try:
         with open(LOG_PATH, "r", encoding="utf-8") as f:
             logs = json.load(f)
+        if not logs:
+            st.warning("No conversation data available yet.")
+            return
+        df = pd.DataFrame(logs)
 
-        if logs:
-            df = pd.DataFrame(logs)
-            st.dataframe(df, use_container_width=True)
+        col1, col2, col3, col4 = st.columns(4)
+        with col1: st.metric("Total Conversations", len(df))
+        with col2: st.metric("Unique Sessions", df['session_id'].nunique() if 'session_id' in df else "N/A")
+        with col3: st.metric("Avg Confidence", f"{df['confidence'].mean():.2f}" if 'confidence' in df else "0")
+        with col4: st.metric("Languages Used", df['detected_lang'].nunique() if 'detected_lang' in df else "N/A")
 
-            # ==== Export to CSV ====
-            st.subheader("📂 Export Logs")
-            csv = df.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                label="⬇️ Download CSV",
-                data=csv,
-                file_name="chat_logs.csv",
-                mime="text/csv"
-            )
-        else:
-            st.info("No logs available yet.")
-    else:
-        st.info("No logs found.")
+        col1, col2 = st.columns(2)
+        with col1:
+            if 'predicted_tag' in df:
+                intent_counts = df['predicted_tag'].value_counts()
+                fig = px.bar(x=intent_counts.index, y=intent_counts.values, title="Most Common Questions")
+                fig.update_layout(xaxis_title="Intent", yaxis_title="Count")
+                st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            if 'detected_lang' in df:
+                lang_counts = df['detected_lang'].value_counts()
+                fig = px.pie(values=lang_counts.values, names=lang_counts.index, title="Language Usage")
+                st.plotly_chart(fig, use_container_width=True)
+
+        st.subheader("Recent Conversations")
+        recent_df = df.tail(10)[['timestamp', 'user_text', 'predicted_tag', 'confidence']].copy()
+        if 'confidence' in recent_df:
+            recent_df['confidence'] = recent_df['confidence'].round(2)
+        st.dataframe(recent_df, use_container_width=True)
+    except Exception as e:
+        st.error(f"Error loading analytics: {e}")
+
+# =============================
+# App UI
+# =============================
+st.set_page_config(page_title="🎓 University FAQ Chatbot", page_icon="🤖", layout="wide")
+logo_path = Path(__file__).resolve().parent / "data" / "university_logo.png"
+col1, col2 = st.columns([1,4])
+with col1:
+    if logo_path.exists():
+        st.image(str(logo_path), width=80)
+with col2:
+    st.title("🎓 University FAQ Chatbot")
+    st.caption("Multilingual support: English • 中文")
+
+with st.sidebar:
+    st.subheader("ℹ️ Info")
+    st.info("This AI chatbot helps answer questions about:\n• Admissions\n• Tuition & Scholarships\n• Exams\n• Library\n• Housing\n• Office Hours")
+    st.subheader("Session")
+    st.text(f"Session ID: {st.session_state.session_id}")
+    st.text(f"Messages: {len(st.session_state.history)}")
+    if st.button("🗑️ Clear Chat"):
+        st.session_state.history = []
+        st.session_state.conversation_context = []
+
+# CSS styling
+st.markdown("""
+    <style>
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 300px;          /* fixed height */
+            overflow-y: auto;       /* scrollable */
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 10px;
+        }
+        .user-bubble, .bot-bubble {
+            padding: 10px;
+            border-radius: 10px;
+            margin: 5px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        @media (prefers-color-scheme: light) {
+            .user-bubble { background-color: #DCF8C6; color: #000; align-self: flex-end; }
+            .bot-bubble { background-color: #F1F0F0; color: #000; align-self: flex-start; }
+        }
+        @media (prefers-color-scheme: dark) {
+            .user-bubble { background-color: #4A8B4E; color: #fff; align-self: flex-end; }
+            .bot-bubble { background-color: #3A3A3A; color: #fff; align-self: flex-start; }
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# Chat and Analytics Tabs
+tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
+with tab1:
+    # Build the conversation HTML
+    chat_html = '<div class="chat-container" id="chat-box">'
+    for speaker, msg in st.session_state.history:
+        bubble_class = "user-bubble" if speaker == "You" else "bot-bubble"
+        chat_html += f'<div class="{bubble_class}">{speaker}: {msg}</div>'
+    chat_html += '</div>'
+
+    # Add JS for auto-scroll
+    chat_html += """
+        <script>
+            var chatBox = document.getElementById('chat-box');
+            if (chatBox) {
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        </script>
+    """
+
+    # Render chat
+    st.markdown(chat_html, unsafe_allow_html=True)
+
+    # Input field
+    st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
+
+with tab2:
+    show_analytics()
