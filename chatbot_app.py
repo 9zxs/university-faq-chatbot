@@ -14,6 +14,7 @@ INTENTS_PATH = BASE_DIR / "data" / "intents.json"
 MODEL_PATH = BASE_DIR / "model.joblib"
 LOG_PATH = BASE_DIR / "data" / "chat_logs.json"
 FEEDBACK_PATH = BASE_DIR / "data" / "feedback.json"
+CSV_PATH = BASE_DIR / "data" / "knowledge_base.csv"   # 🔹 new CSV file
 
 # =============================
 # Supported languages
@@ -25,7 +26,7 @@ SUPPORTED_LANGS = {
 }
 
 # =============================
-# Load model and intents
+# Load model, intents, CSV
 # =============================
 @st.cache_resource
 def load_model():
@@ -36,8 +37,15 @@ def load_intents():
     with open(INTENTS_PATH, "r", encoding="utf-8") as f:
         return json.load(f)["intents"]
 
+@st.cache_resource
+def load_csv_knowledge():
+    if CSV_PATH.exists():
+        return pd.read_csv(CSV_PATH)
+    return pd.DataFrame(columns=["question", "answer"])
+
 clf = load_model()
 intents = load_intents()
+csv_knowledge = load_csv_knowledge()
 
 # =============================
 # Utils
@@ -51,6 +59,17 @@ def translate_text(text, target_lang):
         return text
     except Exception:
         return text
+
+def search_csv_knowledge(user_text: str):
+    """Check CSV knowledge base first with placeholders."""
+    for _, row in csv_knowledge.iterrows():
+        if str(row["question"]).lower() in user_text.lower():
+            answer = row["answer"]
+            # 🔹 Replace placeholders
+            answer = answer.replace("{{date}}", datetime.date.today().strftime("%Y-%m-%d"))
+            answer = answer.replace("{{time}}", datetime.datetime.now().strftime("%H:%M:%S"))
+            return answer
+    return None
 
 def log_interaction(user_text, detected_lang, translated_input, predicted_tag, bot_reply, confidence):
     log_entry = {
@@ -104,9 +123,19 @@ def bot_reply(user_text):
     translated_input = user_text
     try:
         lang = detect(user_text)
-        detected_lang = SUPPORTED_LANGS.get(lang.lower(), "en")  # fallback to English
+        detected_lang = SUPPORTED_LANGS.get(lang.lower(), "en")
     except:
         detected_lang = "en"
+
+    # 🔹 Check CSV knowledge base first
+    csv_answer = search_csv_knowledge(user_text)
+    if csv_answer:
+        reply = translate_text(csv_answer, detected_lang)
+        st.session_state.history.append(("You", user_text))
+        st.session_state.history.append(("Bot", reply))
+        log_interaction(user_text, detected_lang, user_text, "csv_match", reply, 1.0)
+        st.session_state.input = ""
+        return
 
     # Translate to English if needed for intent prediction
     if detected_lang != "en":
@@ -222,7 +251,7 @@ with col2:
 
 with st.sidebar:
     st.subheader("ℹ️ Info")
-    st.info("This AI chatbot helps answer questions about:\n• Admissions\n• Tuition & Scholarships\n• Exams\n• Library\n• Housing\n• Office Hours")
+    st.info("This AI chatbot helps answer questions about:\n• Admissions\n• Tuition & Scholarships\n• Exams\n• Library\n• Housing\n• Office Hours\n• CSV Knowledge")
     st.subheader("Session")
     st.text(f"Session ID: {st.session_state.session_id}")
     st.text(f"Messages: {len(st.session_state.history)}")
@@ -236,8 +265,8 @@ st.markdown("""
         .chat-container {
             display: flex;
             flex-direction: column;
-            height: 300px;          /* fixed height */
-            overflow-y: auto;       /* scrollable */
+            height: 300px;
+            overflow-y: auto;
             border: 1px solid #ddd;
             padding: 10px;
             border-radius: 10px;
@@ -263,14 +292,12 @@ st.markdown("""
 # Chat and Analytics Tabs
 tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
 with tab1:
-    # Build the conversation HTML
     chat_html = '<div class="chat-container" id="chat-box">'
     for speaker, msg in st.session_state.history:
         bubble_class = "user-bubble" if speaker == "You" else "bot-bubble"
         chat_html += f'<div class="{bubble_class}">{speaker}: {msg}</div>'
     chat_html += '</div>'
 
-    # Add JS for auto-scroll
     chat_html += """
         <script>
             var chatBox = document.getElementById('chat-box');
@@ -280,10 +307,8 @@ with tab1:
         </script>
     """
 
-    # Render chat
     st.markdown(chat_html, unsafe_allow_html=True)
 
-    # Input field
     st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
 
 with tab2:
