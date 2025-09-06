@@ -234,9 +234,22 @@ def bot_reply(user_text):
     else:
         reply, confidence, _ = get_csv_response(user_text, detected_lang)
 
+        # Format curriculum nicely if it contains semesters
+        if "Semester" in reply:
+            formatted_reply = ""
+            for line in reply.split("\n"):
+                if line.strip():
+                    formatted_reply += f"• {line.strip()}\n"
+            reply = formatted_reply.strip()
+
+    # Append chat history
     st.session_state.history.append(("You", user_text))
     st.session_state.history.append(("Bot", reply))
+
+    # Log the interaction
     log_interaction(user_text, detected_lang, user_text, reply, confidence)
+
+    # Clear input box
     st.session_state.input = ""
 
 # =============================
