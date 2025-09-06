@@ -1,6 +1,10 @@
 question,answer
-date,Today's date is {{date}}.
-time,The current time is {{time}}.
-admission deadline,"The admission deadline is on June 30, 2025."
-library hours,"The library is open from 8 AM to 10 PM on weekdays, and 9 AM to 6 PM on weekends."
-office hours,"Our office hours are Monday to Friday, 9 AM to 5 PM."
+library hours,The library is open 8 AM – 10 PM (Mon–Fri) and 9 AM – 6 PM (Sat–Sun).
+when does the library open,The library opens at 8 AM on weekdays and 9 AM on weekends.
+when does the library close,The library closes at 10 PM on weekdays and 6 PM on weekends.
+admission deadline,The admission deadline for the upcoming semester is 30 September 2025.
+application deadline,Applications must be submitted by 30 September 2025.
+tuition fees,Tuition fees are RM 8,000 per semester for local students and RM 15,000 for international students.
+scholarship options,Scholarships are available for students with CGPA ≥ 3.5 or strong extracurricular records.
+office hours,University offices are open Monday – Friday, 9 AM – 5 PM.
+exam schedule,Final exams are held in December and June, depending on your semester.
