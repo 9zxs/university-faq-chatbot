@@ -1,5 +1,5 @@
 import streamlit as st
-import json, random, datetime, uuid, re, os
+import json, random, datetime, uuid
 from pathlib import Path
 from deep_translator import GoogleTranslator
 from langdetect import detect
@@ -8,332 +8,447 @@ from difflib import SequenceMatcher
 import plotly.express as px
 
 # =============================
-# Configuration and Constants
+# File paths
 # =============================
 BASE_DIR = Path(__file__).resolve().parent
 KB_PATH = BASE_DIR / "data" / "university_faq_dataset.csv"
 LOG_PATH = BASE_DIR / "data" / "chat_logs.json"
 FEEDBACK_PATH = BASE_DIR / "data" / "feedback.json"
 
-# Ensure data directory exists
-(BASE_DIR / "data").mkdir(exist_ok=True)
-
-# Supported languages (only English and Chinese)
+# =============================
+# Supported languages
+# =============================
 SUPPORTED_LANGS = {
-    "en": "English",
-    "zh-cn": "中文"
-}
-
-LANG_CODES = {
     "en": "en",
     "zh-cn": "zh-CN"
 }
 
 # =============================
-# Error Handling and Validation
+# Load knowledge base
 # =============================
-class ChatbotException(Exception):
-    pass
-
-def validate_input(text):
-    if not text or not isinstance(text, str):
-        raise ChatbotException("Invalid input provided")
-    sanitized = re.sub(r'[<>"\']', '', text.strip())
-    if len(sanitized) > 500:
-        raise ChatbotException("Input too long. Limit to 500 characters.")
-    return sanitized
-
-def safe_translate(text, target_lang, source_lang="auto"):
-    try:
-        if not text or target_lang == "en":
-            return text
-        translator = GoogleTranslator(source=source_lang, target=LANG_CODES.get(target_lang, "en"))
-        result = translator.translate(text)
-        return result if result else text
-    except Exception as e:
-        st.warning(f"Translation service unavailable: {str(e)}")
-        return text
-
-def safe_detect_language(text):
-    try:
-        if not text:
-            return "en"
-        detected = detect(text)
-        return LANG_CODES.get(detected.lower(), "en")
-    except Exception:
-        return "en"
-
-# =============================
-# Load Knowledge Base
-# =============================
-@st.cache_resource(ttl=3600)
+@st.cache_resource
 def load_knowledge_base():
-    try:
-        if not KB_PATH.exists():
-            sample_data = {
-                "question": [
-                    "what are the admission requirements",
-                    "how much is tuition fee",
-                    "when do classes start",
-                    "what courses are available",
-                    "how to apply for scholarship"
-                ],
-                "answer": [
-                    "Admission requirements include a high school diploma, English proficiency test, and completed application form.",
-                    "Tuition fees vary by program. Domestic: RM10,000 per semester. International: RM15,000 per semester.",
-                    "Classes typically start in January, May, and September.",
-                    "Programs: Computer Science, IT, Business, Engineering, Nursing.",
-                    "Scholarships available based on merit, need, or talent. Apply through our portal."
-                ]
-            }
-            df = pd.DataFrame(sample_data)
-            KB_PATH.parent.mkdir(exist_ok=True)
-            df.to_csv(KB_PATH, index=False)
-        else:
-            df = pd.read_csv(KB_PATH)
-        df["question"] = df["question"].str.strip().str.lower()
-        return df
-    except Exception as e:
-        st.error(f"Error loading knowledge base: {str(e)}")
-        return pd.DataFrame(columns=["question", "answer"])
+    df = pd.read_csv(KB_PATH)
+    df["question"] = df["question"].str.strip().str.lower()
+    return df
+
+knowledge_base = load_knowledge_base()
 
 # =============================
-# Courses Data
+# Course Data
 # =============================
 COURSES = {
     "computer science": {
-        "description": "Computer Science prepares students to design and develop software systems.",
-        "duration": "4 years (8 semesters)",
-        "career_prospects": ["Software Developer", "Data Scientist", "AI Engineer"],
-        "keywords": ["computer", "cs", "programming", "software", "coding"]
+        "description": "Computer Science prepares students to design, develop, and analyze software systems. Aims include problem-solving, programming skills, and understanding computing theory.",
+        "curriculum": {
+            "Semester 1": ["Introduction to Programming", "Mathematics for Computing", "Computer Systems Fundamentals", "Communication Skills"],
+            "Semester 2": ["Data Structures", "Object-Oriented Programming", "Discrete Mathematics", "Digital Logic Design"],
+            "Semester 3": ["Algorithms", "Database Systems", "Web Development", "Operating Systems Fundamentals"],
+            "Semester 4": ["Software Engineering", "Computer Networks", "Human-Computer Interaction", "Probability & Statistics"],
+            "Semester 5": ["Artificial Intelligence", "Mobile App Development", "Cybersecurity Basics", "Elective Module 1"],
+            "Semester 6": ["Machine Learning", "Cloud Computing", "Elective Module 2", "Project I"],
+            "Semester 7": ["Advanced AI", "Data Analytics", "Elective Module 3", "Project II"],
+            "Semester 8": ["Capstone Project", "Internship", "Industry Seminars", "Elective Module 4"]
+        },
+        "keywords": ["computer", "cs", "programming", "software"]
     },
     "information technology": {
-        "description": "IT focuses on applying technology to solve business problems.",
-        "duration": "3 years (6 semesters)",
-        "career_prospects": ["IT Manager", "Network Administrator", "System Analyst"],
-        "keywords": ["it", "information technology", "networking", "systems"]
+        "description": "Information Technology focuses on applying technology to solve business and organizational problems. Aims include networking, software applications, and IT project management.",
+        "curriculum": {
+            "Semester 1": ["IT Fundamentals", "Mathematics for IT", "Computer Systems", "Communication Skills"],
+            "Semester 2": ["Networking Basics", "Database Fundamentals", "Web Technologies", "Programming Fundamentals"],
+            "Semester 3": ["Systems Analysis", "Software Development", "IT Security", "Operating Systems"],
+            "Semester 4": ["Cloud Computing", "IT Project Management", "Data Analytics", "Elective 1"],
+            "Semester 5": ["Network Administration", "IT Strategy", "Elective 2", "Capstone Project Preparation"]
+        },
+        "keywords": ["it", "information technology", "networking", "software"]
     },
     "business": {
-        "description": "Business studies prepare students for management roles.",
-        "duration": "3 years (6 semesters)",
-        "career_prospects": ["Business Manager", "Marketing Executive", "Financial Analyst"],
-        "keywords": ["business", "management", "marketing", "finance", "mba"]
+        "description": "Business studies prepare students for careers in management, marketing, finance, and entrepreneurship. Aims include analytical thinking, business strategy, and leadership skills.",
+        "curriculum": {
+            "Semester 1": ["Principles of Management", "Microeconomics", "Business Communication", "Accounting Basics"],
+            "Semester 2": ["Macroeconomics", "Marketing Fundamentals", "Business Law", "Statistics for Business"],
+            "Semester 3": ["Organizational Behavior", "Financial Management", "Operations Management", "Elective 1"],
+            "Semester 4": ["Strategic Management", "Human Resource Management", "Elective 2", "Internship Preparation"]
+        },
+        "keywords": ["business", "management", "marketing", "finance"]
+    },
+    "engineering": {
+        "description": "Engineering programs develop problem-solving, design, and technical skills across various fields such as mechanical, electrical, or civil engineering.",
+        "curriculum": {
+            "Semester 1": ["Engineering Mathematics", "Physics for Engineers", "Introduction to Engineering", "Communication Skills"],
+            "Semester 2": ["Mechanics", "Electrical Circuits", "Material Science", "Programming Fundamentals"],
+            "Semester 3": ["Thermodynamics", "Fluid Mechanics", "Electronics", "Elective 1"],
+            "Semester 4": ["Control Systems", "Instrumentation", "Project 1", "Elective 2"]
+        },
+        "keywords": ["engineering", "mechanical", "civil", "electrical"]
+    },
+    "nursing": {
+        "description": "Nursing programs prepare students to provide healthcare, patient care, and clinical support. Aims include patient safety, clinical skills, and health assessment.",
+        "curriculum": {
+            "Semester 1": ["Introduction to Nursing", "Anatomy & Physiology", "Health Communication", "Biology Basics"],
+            "Semester 2": ["Medical-Surgical Nursing", "Pharmacology", "Pathophysiology", "Patient Care Skills"],
+            "Semester 3": ["Community Health Nursing", "Pediatric Nursing", "Clinical Practicum 1", "Elective 1"],
+            "Semester 4": ["Mental Health Nursing", "Obstetrics Nursing", "Clinical Practicum 2", "Elective 2"]
+        },
+        "keywords": ["nursing", "healthcare", "clinical", "patient"]
     }
 }
 
 # =============================
-# Session Management
+# Keyword mapping
 # =============================
-def initialize_session():
-    if "history" not in st.session_state:
-        st.session_state.history = []
-    if "session_id" not in st.session_state:
-        st.session_state.session_id = str(uuid.uuid4())[:8]
-    if "current_course" not in st.session_state:
-        st.session_state.current_course = None
-    if "user_language" not in st.session_state:
-        st.session_state.user_language = "en"
-    if "conversation_context" not in st.session_state:
-        st.session_state.conversation_context = []
+KEYWORD_MAP = {
+    "fee": "tuition",
+    "fees": "tuition",
+    "tuition": "tuition",
+    "tuition fee": "tuition",
+    "application fee": "tuition",
+    "computer": "computer science",
+    "cs": "computer science",
+    "it": "information technology",
+    "ai": "artificial intelligence"
+}
 
 # =============================
-# Logging
+# Utils
 # =============================
-def log_interaction(user_text, detected_lang, translated_input, bot_reply, confidence, intent=None):
+def translate_text(text, target_lang):
     try:
-        log_entry = {
+        if target_lang == "en":
+            return text
+        if target_lang == "zh-CN":
+            return GoogleTranslator(source="en", target="zh-CN").translate(text)
+        return text
+    except:
+        return text
+
+def log_interaction(user_text, detected_lang, translated_input, bot_reply, confidence):
+    log_entry = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "session_id": st.session_state.session_id,
+        "user_text": user_text,
+        "detected_lang": detected_lang,
+        "translated_input": translated_input,
+        "bot_reply": bot_reply,
+        "confidence": confidence
+    }
+    logs = []
+    if LOG_PATH.exists():
+        with open(LOG_PATH, "r", encoding="utf-8") as f:
+            logs = json.load(f)
+    logs.append(log_entry)
+    with open(LOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(logs, f, indent=2)
+
+def find_best_matches(user_input, questions, threshold=0.4):
+    user_input_lower = user_input.lower()
+    matches = []
+    for q in questions:
+        ratio = SequenceMatcher(None, user_input_lower, q).ratio()
+        if ratio >= threshold:
+            matches.append((q, ratio))
+    matches.sort(key=lambda x: x[1], reverse=True)
+    return matches
+
+# =============================
+# Session state
+# =============================
+if "history" not in st.session_state:
+    st.session_state.history = []
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())[:8]
+if "course_pending" not in st.session_state:
+    st.session_state.course_pending = None
+if "current_course" not in st.session_state:
+    st.session_state.current_course = None
+
+# =============================
+# Get response
+# =============================
+def get_csv_response(user_input, detected_lang="en"):
+    fallback_response = {
+        "en": "Sorry, I don’t know that yet. Please try more detailed questions.",
+        "zh-CN": "抱歉，我还不知道。请尝试更详细的提问。"
+    }
+
+    translated_input = user_input
+    if detected_lang == "zh-CN":
+        translated_input = GoogleTranslator(source="zh-CN", target="en").translate(user_input)
+
+    user_input_lower = translated_input.lower()
+
+    # 1. Pending course confirmation
+    if st.session_state.course_pending:
+        if user_input_lower in ["yes", "y", "是"]:
+            course = st.session_state.course_pending
+            st.session_state.course_pending = None
+            st.session_state.current_course = course
+            if course in COURSES:
+                syllabus = COURSES[course]["curriculum"]
+                response = ""
+                for sem, subjects in syllabus.items():
+                    response += f"{sem}: {', '.join(subjects)}\n"
+                if detected_lang == "zh-CN":
+                    response = GoogleTranslator(source="en", target="zh-CN").translate(response)
+                return response.strip(), 1.0, translated_input
+        else:
+            st.session_state.course_pending = None
+
+    # 2. Tuition / fee keywords
+    tuition_keywords = ["fee", "fees", "tuition", "tuition fee", "application fee"]
+    if any(word in user_input_lower for word in tuition_keywords):
+        course = st.session_state.current_course
+        if course:
+            if "international" in user_input_lower:
+                response = f"The tuition fees for {course.title()} are RM 15,000 per semester for international students."
+            elif "domestic" in user_input_lower or "local" in user_input_lower:
+                response = f"The tuition fees for {course.title()} are RM 10,000 per semester for domestic students."
+            else:
+                response = f"The tuition fees for {course.title()} are RM 10,000 per semester for domestic students and RM 15,000 per semester for international students."
+        else:
+            if "international" in user_input_lower:
+                response = "Tuition fees are RM 15,000 per semester for international students."
+            elif "domestic" in user_input_lower or "local" in user_input_lower:
+                response = "Tuition fees are RM 10,000 per semester for domestic students."
+            else:
+                response = "Tuition fees are RM 10,000 per semester for domestic students and RM 15,000 per semester for international students."
+        if detected_lang == "zh-CN":
+            response = GoogleTranslator(source="en", target="zh-CN").translate(response)
+        return response, 1.0, translated_input
+
+    # 3. Fuzzy match course keywords
+    best_ratio = 0
+    matched_course = None
+    for course_name, course_data in COURSES.items():
+        for keyword in course_data["keywords"]:
+            ratio = SequenceMatcher(None, user_input_lower, keyword).ratio()
+            if ratio > best_ratio:
+                best_ratio = ratio
+                matched_course = course_name
+    if best_ratio >= 0.6:
+        st.session_state.course_pending = matched_course
+        response = f"Do you mean the '{matched_course.title()}' course?"
+        if detected_lang == "zh-CN":
+            response = GoogleTranslator(source="en", target="zh-CN").translate(response)
+        return response, 1.0, translated_input
+
+    # 4. Check KEYWORD_MAP
+    mapped_q = KEYWORD_MAP.get(user_input_lower, user_input_lower)
+    if mapped_q in COURSES:
+        st.session_state.course_pending = mapped_q
+        response = f"Do you mean the '{mapped_q.title()}' course?"
+        if detected_lang == "zh-CN":
+            response = GoogleTranslator(source="en", target="zh-CN").translate(response)
+        return response, 1.0, translated_input
+
+    # 5. Fuzzy match CSV knowledge base
+    questions = knowledge_base["question"].tolist()
+    matches = find_best_matches(translated_input, questions, threshold=0.3)
+    if matches:
+        matched_q = matches[0][0]
+        answer = knowledge_base.loc[knowledge_base["question"].str.lower() == matched_q.lower(), "answer"].values[0]
+        if detected_lang == "zh-CN":
+            answer = GoogleTranslator(source="en", target="zh-CN").translate(answer)
+        return answer, matches[0][1], translated_input
+
+    # 6. Fallback
+    return fallback_response[detected_lang], 0.0, translated_input
+
+# =============================
+# Bot reply
+# =============================
+def bot_reply(user_text):
+    detected_lang = "en"
+    try:
+        lang = detect(user_text)
+        detected_lang = SUPPORTED_LANGS.get(lang.lower(), "en")
+    except:
+        detected_lang = "en"
+
+    greetings_en = ["hi", "hello", "hey"]
+    greetings_zh = ["你好", "嗨"]
+
+    if user_text.lower() in greetings_en or user_text in greetings_zh:
+        reply = "Hello! How can I help you?" if detected_lang=="en" else "您好！我能帮您什么吗？"
+        confidence = 1.0
+    elif user_text.lower() in ["time", "what time is it"] or user_text in ["时间", "现在几点"]:
+        reply = f"The current time is {datetime.datetime.now().strftime('%H:%M:%S')}." if detected_lang=="en" else f"当前时间是 {datetime.datetime.now().strftime('%H:%M:%S')}。"
+        confidence = 1.0
+    else:
+        reply, confidence, _ = get_csv_response(user_text, detected_lang)
+
+        # Format curriculum nicely if it contains semesters
+        if "Semester" in reply:
+            formatted_reply = ""
+            for line in reply.split("\n"):
+                if line.strip():
+                    formatted_reply += f"• {line.strip()}\n"
+            reply = formatted_reply.strip()
+
+    # Append chat history
+    st.session_state.history.append(("You", user_text))
+    st.session_state.history.append(("Bot", reply))
+
+    # Log the interaction
+    log_interaction(user_text, detected_lang, user_text, reply, confidence)
+
+    # Clear input box
+    st.session_state.input = ""
+
+# =============================
+# Feedback
+# =============================
+def save_feedback(rating, comment=""):
+    try:
+        feedback_data = []
+        if FEEDBACK_PATH.exists():
+            with open(FEEDBACK_PATH, "r", encoding="utf-8") as f:
+                feedback_data = json.load(f)
+        feedback_data.append({
             "timestamp": datetime.datetime.now().isoformat(),
             "session_id": st.session_state.session_id,
-            "user_text": user_text,
-            "detected_lang": detected_lang,
-            "translated_input": translated_input,
-            "bot_reply": bot_reply,
-            "confidence": confidence,
-            "intent": intent
-        }
+            "rating": rating,
+            "comment": comment,
+            "conversation_length": len(st.session_state.history)
+        })
+        with open(FEEDBACK_PATH, "w", encoding="utf-8") as f:
+            json.dump(feedback_data, f, indent=2)
+        st.success("Thank you for your feedback! 🙏" if "en" else "感谢您的反馈！🙏")
+    except Exception as e:
+        st.error(f"Error saving feedback: {e}")
+
+# =============================
+# Analytics
+# =============================
+def show_analytics():
+    st.header("📊 Analytics Dashboard")
+
+    # -----------------------------
+    # Load conversation logs
+    # -----------------------------
+    if LOG_PATH.exists():
+        with open(LOG_PATH, "r", encoding="utf-8") as f:
+            logs = json.load(f)
+    else:
         logs = []
-        if LOG_PATH.exists():
-            with open(LOG_PATH, "r", encoding="utf-8") as f:
-                logs = json.load(f)
-        logs.append(log_entry)
-        if len(logs) > 1000:
-            logs = logs[-1000:]
-        with open(LOG_PATH, "w", encoding="utf-8") as f:
-            json.dump(logs, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        st.error(f"Logging error: {str(e)}")
 
-# =============================
-# Response Generation
-# =============================
-def get_enhanced_response(user_input, detected_lang="en"):
-    try:
-        user_input = validate_input(user_input)
-        knowledge_base = load_knowledge_base()
-
-        fallback_responses = {
-            "en": "I'm sorry, I don't have information about that. Try asking about courses, admissions, fees, or facilities.",
-            "zh-CN": "抱歉，我没有相关信息。请尝试询问课程、入学、费用或设施。"
-        }
-
-        translated_input = user_input
-        if detected_lang != "en":
-            translated_input = safe_translate(user_input, "en", detected_lang)
-        user_input_lower = translated_input.lower()
-
-        intent = classify_intent(user_input_lower)
-
-        if intent == "greeting":
-            response = handle_greeting(detected_lang)
-            confidence = 1.0
-        elif intent == "course_inquiry":
-            response, confidence = handle_course_inquiry(user_input_lower, detected_lang)
-        elif intent == "fees":
-            response, confidence = handle_fees_inquiry(user_input_lower, detected_lang)
-        elif intent == "time":
-            response = handle_time_query(detected_lang)
-            confidence = 1.0
-        else:
-            response, confidence = fuzzy_match_kb(translated_input, knowledge_base)
-            if confidence < 0.3:
-                response = fallback_responses.get(detected_lang, fallback_responses["en"])
-                confidence = 0.0
-
-        if detected_lang != "en" and confidence > 0:
-            response = safe_translate(response, detected_lang)
-
-        return response, confidence, translated_input, intent
-    except Exception as e:
-        st.error(f"Error generating response: {str(e)}")
-        return "I encountered an error. Please try again.", 0.0, user_input, "error"
-
-def classify_intent(user_input):
-    greetings = ["hello", "hi", "hey", "good morning", "good afternoon"]
-    course_keywords = ["course", "program", "study", "curriculum"]
-    fee_keywords = ["fee", "cost", "tuition", "payment"]
-    time_keywords = ["time", "when", "schedule", "calendar"]
-
-    if any(word in user_input for word in greetings):
-        return "greeting"
-    elif any(word in user_input for word in course_keywords):
-        return "course_inquiry"
-    elif any(word in user_input for word in fee_keywords):
-        return "fees"
-    elif any(word in user_input for word in time_keywords):
-        return "time"
+    # -----------------------------
+    # Load feedback
+    # -----------------------------
+    if FEEDBACK_PATH.exists():
+        with open(FEEDBACK_PATH, "r", encoding="utf-8") as f:
+            feedback_data = json.load(f)
     else:
-        return "general"
+        feedback_data = []
 
-def handle_greeting(lang):
-    greetings = {
-        "en": "Hello! 👋 Welcome to our University. How can I assist you today?",
-        "zh-CN": "您好！👋 欢迎来到我们大学。我能为您做些什么？"
-    }
-    return greetings.get(lang, greetings["en"])
+    # -----------------------------
+    # Display summary metrics
+    # -----------------------------
+    col1, col2, col3, col4 = st.columns(4)
+    with col1: st.metric("Total Conversations", len(logs))
+    with col2: st.metric("Unique Sessions", len(set([log.get("session_id") for log in logs])))
+    with col3: st.metric("Languages Used", len(set([log.get("detected_lang") for log in logs])))
+    with col4: st.metric("Feedback Entries", len(feedback_data))
 
-def handle_course_inquiry(user_input, lang):
-    for course_name, course_data in COURSES.items():
-        if any(keyword in user_input for keyword in course_data["keywords"]):
-            response = f"📚 **{course_name.title()}**\n"
-            response += f"**Description:** {course_data['description']}\n"
-            response += f"**Duration:** {course_data['duration']}\n"
-            response += f"**Career Prospects:** {', '.join(course_data['career_prospects'])}\n"
-            response += "Would you like to know more about the curriculum or admission requirements?"
-            st.session_state.current_course = course_name
-            return response, 0.9
+    # -----------------------------
+    # Conversation Analytics
+    # -----------------------------
+    if logs:
+        df_logs = pd.DataFrame(logs)
+        st.subheader("Recent Conversations")
+        recent_df = df_logs.tail(10)[['timestamp', 'user_text', 'bot_reply', 'confidence']].copy()
+        if 'confidence' in recent_df:
+            recent_df['confidence'] = recent_df['confidence'].round(2)
+        st.dataframe(recent_df, use_container_width=True)
 
-    response = "🎓 We offer the following programs:\n"
-    for course_name in COURSES.keys():
-        response += f"• **{course_name.title()}**\n"
-    response += "Which program would you like to know more about?"
-    return response, 0.8
+    # -----------------------------
+    # Feedback Analytics
+    # -----------------------------
+    if feedback_data:
+        st.subheader("Feedback Overview")
+        df_feedback = pd.DataFrame(feedback_data)
 
-def handle_fees_inquiry(user_input, lang):
-    course = st.session_state.current_course
-    if "international" in user_input:
-        fee = "RM 15,000"
-        student_type = "international"
-    elif "domestic" in user_input or "local" in user_input:
-        fee = "RM 10,000"
-        student_type = "domestic"
+        # Ratings summary
+        st.markdown("**Ratings Distribution**")
+        rating_counts = df_feedback['rating'].value_counts().sort_index()
+        fig = px.bar(x=rating_counts.index, y=rating_counts.values, labels={'x':'Rating', 'y':'Count'}, title="Chatbot Ratings")
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Average rating
+        avg_rating = df_feedback['rating'].mean()
+        st.metric("Average Rating", f"{avg_rating:.2f} / 5")
+
+        # Comments
+        st.markdown("**Recent Comments**")
+        for idx, row in df_feedback.tail(5).iterrows():
+            st.markdown(f"- {row['comment']} (Rating: {row['rating']})")
     else:
-        response = "💰 **Tuition Fees:**\n• Domestic: RM 10,000 per semester\n• International: RM 15,000 per semester\n"
-        response += "Additional fees may apply. Want info about scholarships?"
-        return response, 1.0
-
-    if course:
-        response = f"💰 Tuition fees for **{course.title()}**: **{fee}** per semester ({student_type} students)."
-    else:
-        response = f"💰 Tuition fees: **{fee}** per semester ({student_type} students)."
-    return response, 1.0
-
-def handle_time_query(lang):
-    current_time = datetime.datetime.now()
-    responses = {
-        "en": f"🕒 Current time: {current_time.strftime('%I:%M %p')} on {current_time.strftime('%B %d, %Y')}",
-        "zh-CN": f"🕒 当前时间：{current_time.strftime('%Y年%m月%d日 %H:%M')}"
-    }
-    return responses.get(lang, responses["en"])
-
-def fuzzy_match_kb(user_input, knowledge_base):
-    if knowledge_base.empty:
-        return "Knowledge base is empty.", 0.0
-    questions = knowledge_base["question"].tolist()
-    matches = []
-    user_words = set(user_input.lower().split())
-    for idx, question in enumerate(questions):
-        question_words = set(question.split())
-        overlap_ratio = len(user_words.intersection(question_words)) / len(user_words.union(question_words)) if user_words.union(question_words) else 0
-        seq_ratio = SequenceMatcher(None, user_input.lower(), question).ratio()
-        combined_score = (overlap_ratio * 0.6) + (seq_ratio * 0.4)
-        if combined_score > 0.3:
-            matches.append((question, combined_score, idx))
-    if matches:
-        matches.sort(key=lambda x: x[1], reverse=True)
-        best_match = matches[0]
-        answer = knowledge_base.iloc[best_match[2]]["answer"]
-        return answer, best_match[1]
-    return "No relevant information found.", 0.0
+        st.info("No feedback data available yet.")
 
 # =============================
-# Chat Interface
+# App UI
 # =============================
-def chat_interface():
-    st.subheader("💬 Chat with our AI Assistant")
-    display_chat()
-    user_input = st.text_input("Type your message here...", key="chat_input")
-    if user_input and not st.session_state.get("just_submitted", False):
-        process_input(user_input)
-        st.session_state.just_submitted = True
-        st.experimental_rerun()
-    else:
-        st.session_state.just_submitted = False
-
-def display_chat():
-    if not st.session_state.history:
-        st.info("👋 Welcome! Start a conversation by asking about programs, admissions, fees, or schedules.")
-        return
-    for speaker, message in st.session_state.history:
-        if speaker == "You":
-            st.markdown(f"**{speaker}:** {message}")
-        else:
-            st.markdown(f"**{speaker}:** {message}")
-
-def process_input(user_input):
-    detected_lang = safe_detect_language(user_input)
-    response, confidence, translated_input, intent = get_enhanced_response(user_input, detected_lang)
-    st.session_state.history.append(("You", user_input))
-    st.session_state.history.append(("Bot", response))
-    log_interaction(user_input, detected_lang, translated_input, response, confidence, intent)
-
-# =============================
-# Main
-# =============================
-def main():
-    st.set_page_config(page_title="University FAQ Chatbot", layout="wide")
-    initialize_session()
+st.set_page_config(page_title="🎓 University FAQ Chatbot", page_icon="🤖", layout="wide")
+logo_path = BASE_DIR / "data" / "university_logo.png"
+col1, col2 = st.columns([1,4])
+with col1:
+    if logo_path.exists():
+        st.image(str(logo_path), width=80)
+with col2:
     st.title("🎓 University FAQ Chatbot")
-    chat_interface()
+    st.caption("Multilingual support: English • 中文")
 
-if __name__ == "__main__":
-    main()
+with st.sidebar:
+    st.subheader("ℹ️ Info")
+    st.info("This AI chatbot helps answer questions about:\n• Admissions\n• Tuition & Scholarships\n• Exams\n• Library\n• Housing\n• Office Hours")
+    st.subheader("Session")
+    st.text(f"Session ID: {st.session_state.session_id}")
+    st.text(f"Messages: {len(st.session_state.history)}")
+    if st.button("🗑️ Clear Chat"):
+        st.session_state.history = []
+        st.session_state.course_pending = None
+        st.session_state.current_course = None
+
+st.markdown("""
+<style>
+.chat-container { display: flex; flex-direction: column; height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 10px;}
+.user-bubble, .bot-bubble { padding: 10px; border-radius: 10px; margin: 5px; max-width: 70%; word-wrap: break-word; }
+@media (prefers-color-scheme: light) { .user-bubble { background-color: #DCF8C6; color: #000; align-self: flex-end; } .bot-bubble { background-color: #F1F0F0; color: #000; align-self: flex-start; } }
+@media (prefers-color-scheme: dark) { .user-bubble { background-color: #4A8B4E; color: #fff; align-self: flex-end; } .bot-bubble { background-color: #3A3A3A; color: #fff; align-self: flex-start; } }
+</style>
+""", unsafe_allow_html=True)
+
+tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
+with tab1:
+    st.subheader("Quick Questions")
+    faq_options = ["Admissions", "Tuition", "Exams", "Library", "Housing", "Office Hours"]
+    cols = st.columns(len(faq_options))
+    for i, option in enumerate(faq_options):
+        if cols[i].button(option):
+            st.session_state.input = option
+            bot_reply(option)
+
+    chat_html = '<div class="chat-container" id="chat-box">'
+    for speaker, msg in st.session_state.history:
+        bubble_class = "user-bubble" if speaker=="You" else "bot-bubble"
+        chat_html += f'<div class="{bubble_class}">{speaker}: {msg}</div>'
+    chat_html += '</div>'
+    chat_html += "<script>var chatBox=document.getElementById('chat-box');if(chatBox){chatBox.scrollTop=chatBox.scrollHeight;}</script>"
+    st.markdown(chat_html, unsafe_allow_html=True)
+
+    st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
+
+    # =============================
+    # Feedback Form
+    # =============================
+    st.subheader("💡 Feedback")
+    with st.form(key="feedback_form"):
+        rating = st.slider("Rate your experience with the chatbot:", min_value=1, max_value=5, value=5)
+        comment = st.text_area("Any comments or suggestions?", "")
+        submitted = st.form_submit_button("Submit Feedback")
+        if submitted:
+            save_feedback(rating, comment)
+
+with tab2:
+    show_analytics()
