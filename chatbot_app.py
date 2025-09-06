@@ -481,7 +481,7 @@ def show_enhanced_analytics():
         
         with col2:
             st.subheader("Confidence Score Distribution")
-            fig = px.histogram(df_logs, x='confidence', nbins=20,
+            fig = px.histogram(df_logs, x='confidence', bins=20,
                              title="Response Confidence Scores")
             st.plotly_chart(fig, use_container_width=True)
         
@@ -786,7 +786,7 @@ def enhanced_feedback_form():
         
         if st.form_submit_button("📤 Submit Feedback", type="primary"):
             feedback_data = {
-                "timestamp": datetime.datetime.now().isoformat(),
+                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "session_id": st.session_state.session_id,
                 "overall_rating": rating,
                 "response_speed": response_speed,
