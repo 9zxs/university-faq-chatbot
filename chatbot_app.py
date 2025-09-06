@@ -47,14 +47,14 @@ def translate_text(text, target_lang):
     except:
         return text
 
-def log_interaction(user_text, detected_lang, translated_input, bot_reply, confidence):
+def log_interaction(user_text, detected_lang, translated_input, bot_reply_text, confidence):
     log_entry = {
         "timestamp": datetime.datetime.now().isoformat(),
         "session_id": st.session_state.session_id,
         "user_text": user_text,
         "detected_lang": detected_lang,
         "translated_input": translated_input,
-        "bot_reply": bot_reply,
+        "bot_reply": bot_reply_text,
         "confidence": confidence
     }
     logs = []
@@ -68,7 +68,7 @@ def log_interaction(user_text, detected_lang, translated_input, bot_reply, confi
 # =============================
 # Fuzzy matching
 # =============================
-def find_best_matches(user_input, questions, threshold=0.4):
+def find_best_matches(user_input, questions, threshold=0.3):
     user_input_lower = user_input.lower()
     matches = []
     for q in questions:
@@ -85,15 +85,14 @@ def get_csv_response(user_input, detected_lang="en"):
     }
 
     try:
-        # 1. Translate user input to English if Chinese
+        # Translate to English if input is Chinese
         translated_input = user_input
         if detected_lang == "zh-CN":
             translated_input = GoogleTranslator(source="zh-CN", target="en").translate(user_input)
 
-        # 2. Fuzzy match in English CSV
+        # Fuzzy match in CSV
         questions = knowledge_base["question"].tolist()
-        matches = find_best_matches(translated_input, questions, threshold=0.3)  # lowered threshold
-
+        matches = find_best_matches(translated_input, questions, threshold=0.3)
         if matches:
             matched_q = matches[0][0]
             answer = knowledge_base.loc[knowledge_base["question"].str.lower() == matched_q.lower(), "answer"].values[0]
@@ -103,12 +102,11 @@ def get_csv_response(user_input, detected_lang="en"):
             response = fallback_response[detected_lang]
             confidence = 0.0
 
-        # 3. Translate back to Chinese if needed
+        # Translate back to Chinese if needed
         if detected_lang == "zh-CN" and response != fallback_response["zh-CN"]:
             response = GoogleTranslator(source="en", target="zh-CN").translate(response)
 
         return response, confidence, translated_input
-
     except Exception as e:
         print("Error in get_csv_response:", e)
         return fallback_response[detected_lang], 0.0, user_input
@@ -120,6 +118,8 @@ if "history" not in st.session_state:
     st.session_state.history = []
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())[:8]
+if "input" not in st.session_state:
+    st.session_state.input = ""
 
 # =============================
 # Bot reply
@@ -138,14 +138,13 @@ def bot_reply(user_text):
     if user_text.lower() in greetings_en or user_text in greetings_zh:
         reply = "Hello! How can I help you?" if detected_lang=="en" else "您好！我能帮您什么吗？"
         confidence = 1.0
-    # Explicit time query (exact match)
+    # Time query
     elif user_text.lower() in ["time", "what time is it"] or user_text in ["时间", "现在几点"]:
         reply = f"The current time is {datetime.datetime.now().strftime('%H:%M:%S')}." if detected_lang=="en" else f"当前时间是 {datetime.datetime.now().strftime('%H:%M:%S')}。"
         confidence = 1.0
     else:
         reply, confidence, _ = get_csv_response(user_text, detected_lang)
 
-    # Save conversation
     st.session_state.history.append(("You", user_text))
     st.session_state.history.append(("Bot", reply))
     log_interaction(user_text, detected_lang, user_text, reply, confidence)
@@ -188,7 +187,6 @@ def show_analytics():
             st.warning("No conversation data available yet.")
             return
         df = pd.DataFrame(logs)
-
         col1, col2, col3 = st.columns(3)
         with col1: st.metric("Total Conversations", len(df))
         with col2: st.metric("Unique Sessions", df['session_id'].nunique() if 'session_id' in df else "N/A")
@@ -237,6 +235,7 @@ with st.sidebar:
     if st.button("🗑️ Clear Chat"):
         st.session_state.history = []
 
+# Chat bubble styling with light/dark theme
 st.markdown("""
 <style>
 .chat-container { display: flex; flex-direction: column; height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 10px;}
@@ -261,7 +260,6 @@ with tab1:
     cols = st.columns(len(faq_options))
     for i, option in enumerate(faq_options):
         if cols[i].button(option):
-            # Use the FAQ option as user input
             st.session_state.input = option
             bot_reply(option)
 
@@ -276,6 +274,6 @@ with tab1:
 
     # User input
     st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
-    
+
 with tab2:
     show_analytics()
