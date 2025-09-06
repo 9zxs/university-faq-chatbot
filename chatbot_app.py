@@ -654,6 +654,22 @@ def main():
         align-self: flex-start;
         margin-right: auto;
     }
+
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+        .chat-container {
+            background: #1e1e1e;
+            border-color: #444;
+        }
+        .user-bubble {
+            background: linear-gradient(135deg, #3a3aeb 0%, #5e5ea2 100%);
+            color: #fff;
+        }
+        .bot-bubble {
+            background: linear-gradient(135deg, #b84cf5 0%, #f25c6c 100%);
+            color: #fff;
+        }
+    }
     </style>
     """, unsafe_allow_html=True)
     
