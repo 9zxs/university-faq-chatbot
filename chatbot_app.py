@@ -35,9 +35,85 @@ def load_knowledge_base():
 knowledge_base = load_knowledge_base()
 
 # =============================
-# Course information dataset
+# Utils
 # =============================
-COURSES_INFO = {
+def translate_text(text, target_lang):
+    try:
+        if target_lang == "en":
+            return text
+        if target_lang == "zh-CN":
+            return GoogleTranslator(source="en", target="zh-CN").translate(text)
+        return text
+    except:
+        return text
+
+def log_interaction(user_text, detected_lang, translated_input, bot_reply, confidence):
+    log_entry = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "session_id": st.session_state.session_id,
+        "user_text": user_text,
+        "detected_lang": detected_lang,
+        "translated_input": translated_input,
+        "bot_reply": bot_reply,
+        "confidence": confidence
+    }
+    logs = []
+    if LOG_PATH.exists():
+        with open(LOG_PATH, "r", encoding="utf-8") as f:
+            logs = json.load(f)
+    logs.append(log_entry)
+    with open(LOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(logs, f, indent=2)
+
+def find_best_matches(user_input, questions, threshold=0.4):
+    user_input_lower = user_input.lower()
+    matches = []
+    for q in questions:
+        ratio = SequenceMatcher(None, user_input_lower, q).ratio()
+        if ratio >= threshold:
+            matches.append((q, ratio))
+    matches.sort(key=lambda x: x[1], reverse=True)
+    return matches
+
+def get_csv_response(user_input, detected_lang="en"):
+    fallback_response = {
+        "en": "Sorry, I don’t know that yet. Please contact the admin office.",
+        "zh-CN": "抱歉，我还不知道。请联系管理办公室。"
+    }
+
+    try:
+        # 1. Translate user input to English if Chinese
+        translated_input = user_input
+        if detected_lang == "zh-CN":
+            translated_input = GoogleTranslator(source="zh-CN", target="en").translate(user_input)
+
+        # 2. Fuzzy match in English CSV
+        questions = knowledge_base["question"].tolist()
+        matches = find_best_matches(translated_input, questions, threshold=0.3)
+
+        if matches:
+            matched_q = matches[0][0]
+            answer = knowledge_base.loc[knowledge_base["question"].str.lower() == matched_q.lower(), "answer"].values[0]
+            response = answer
+            confidence = matches[0][1]
+        else:
+            response = fallback_response[detected_lang]
+            confidence = 0.0
+
+        # 3. Translate back to Chinese if needed
+        if detected_lang == "zh-CN" and response != fallback_response["zh-CN"]:
+            response = GoogleTranslator(source="en", target="zh-CN").translate(response)
+
+        return response, confidence, translated_input
+
+    except Exception as e:
+        print("Error in get_csv_response:", e)
+        return fallback_response[detected_lang], 0.0, user_input
+
+# =============================
+# Course Data
+# =============================
+COURSES = {
     "computer science": {
         "description": "Computer Science prepares students to design, develop, and analyze software systems. Aims include problem-solving, programming skills, and understanding computing theory.",
         "curriculum": {
@@ -95,108 +171,31 @@ COURSES_INFO = {
     }
 }
 
-# =============================
-# Utils
-# =============================
-def translate_text(text, target_lang):
-    try:
-        if target_lang == "en":
-            return text
-        if target_lang == "zh-CN":
-            return GoogleTranslator(source="en", target="zh-CN").translate(text)
-        return text
-    except:
-        return text
-
-def log_interaction(user_text, detected_lang, translated_input, bot_reply, confidence):
-    log_entry = {
-        "timestamp": datetime.datetime.now().isoformat(),
-        "session_id": st.session_state.session_id,
-        "user_text": user_text,
-        "detected_lang": detected_lang,
-        "translated_input": translated_input,
-        "bot_reply": bot_reply,
-        "confidence": confidence
-    }
-    logs = []
-    if LOG_PATH.exists():
-        with open(LOG_PATH, "r", encoding="utf-8") as f:
-            logs = json.load(f)
-    logs.append(log_entry)
-    with open(LOG_PATH, "w", encoding="utf-8") as f:
-        json.dump(logs, f, indent=2)
-
-def find_best_matches(user_input, questions, threshold=0.4):
-    user_input_lower = user_input.lower()
-    matches = []
-    for q in questions:
-        ratio = SequenceMatcher(None, user_input_lower, q).ratio()
-        if ratio >= threshold:
-            matches.append((q, ratio))
-    matches.sort(key=lambda x: x[1], reverse=True)
-    return matches
-
-# =============================
-# Course-specific logic
-# =============================
-def check_course_intent(user_input):
-    """
-    Returns (course_name, intent_type) if matched
-    intent_type: "description" or "curriculum" or "clarify"
-    """
-    input_lower = user_input.lower()
-    for course, info in COURSES_INFO.items():
-        # If user explicitly asks "what is" or "aim" etc
-        if any(kw in input_lower for kw in info['keywords']):
-            if any(word in input_lower for word in ["what is", "aim", "goal", "describe", "objective"]):
-                return course, "description"
-            elif any(word in input_lower for word in ["learn", "study", "curriculum", "module", "semester"]):
-                return course, "curriculum"
-            elif input_lower.strip() in info['keywords']:
-                return course, "clarify"
+def check_course_intent(user_text):
+    text_lower = user_text.lower()
+    for course_name in COURSES.keys():
+        if course_name in text_lower:
+            # Ask for clarification if user says a general keyword like 'computer'
+            if "computer" in text_lower and course_name != "computer science":
+                return course_name, "clarify"
+            return course_name, "curriculum"
+        if text_lower in ["what is " + course_name, "aims of " + course_name, "goals of " + course_name]:
+            return course_name, "description"
+    # general "computer" keyword
+    if "computer" in text_lower:
+        return "computer science", "clarify"
     return None, None
 
 def get_course_reply(course_name, intent_type):
-    if intent_type == "description":
-        return COURSES_INFO[course_name]["description"]
-    elif intent_type == "curriculum":
-        curriculum = COURSES_INFO[course_name]["curriculum"]
-        reply = f"{course_name.title()} Program Curriculum:\n"
-        for sem, subjects in curriculum.items():
-            reply += f"{sem}: {', '.join(subjects)}\n"
-        return reply.strip()
-    elif intent_type == "clarify":
-        return f"Do you mean the '{course_name.title()}' course?"
-    return None
-
-# =============================
-# CSV FAQ response
-# =============================
-def get_csv_response(user_input, detected_lang="en"):
-    fallback_response = {
-        "en": "Sorry, I don’t know that yet. Please contact the admin office.",
-        "zh-CN": "抱歉，我还不知道。请联系管理办公室。"
-    }
-    try:
-        translated_input = user_input
-        if detected_lang == "zh-CN":
-            translated_input = GoogleTranslator(source="zh-CN", target="en").translate(user_input)
-        questions = knowledge_base["question"].tolist()
-        matches = find_best_matches(translated_input, questions, threshold=0.3)
-        if matches:
-            matched_q = matches[0][0]
-            answer = knowledge_base.loc[knowledge_base["question"].str.lower() == matched_q.lower(), "answer"].values[0]
-            response = answer
-            confidence = matches[0][1]
-        else:
-            response = fallback_response[detected_lang]
-            confidence = 0.0
-        if detected_lang == "zh-CN" and response != fallback_response["zh-CN"]:
-            response = GoogleTranslator(source="en", target="zh-CN").translate(response)
-        return response, confidence, translated_input
-    except Exception as e:
-        print("Error in get_csv_response:", e)
-        return fallback_response[detected_lang], 0.0, user_input
+    course_info = COURSES.get(course_name)
+    if not course_info:
+        return "Sorry, course information is not available yet."
+    if intent_type == "curriculum":
+        return course_info["curriculum"]
+    elif intent_type == "description":
+        return course_info["description"]
+    else:
+        return "Sorry, I don’t understand your question about this course."
 
 # =============================
 # Session state
@@ -205,6 +204,8 @@ if "history" not in st.session_state:
     st.session_state.history = []
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())[:8]
+if "pending_course_clarify" not in st.session_state:
+    st.session_state.pending_course_clarify = None
 
 # =============================
 # Bot reply
@@ -217,27 +218,43 @@ def bot_reply(user_text):
     except:
         detected_lang = "en"
 
-    # Greetings
-    greetings_en = ["hi", "hello", "hey"]
-    greetings_zh = ["你好", "嗨"]
-    if user_text.lower() in greetings_en or user_text in greetings_zh:
-        reply = "Hello! How can I help you?" if detected_lang=="en" else "您好！我能帮您什么吗？"
-        confidence = 1.0
-    # Explicit time query
-    elif user_text.lower() in ["time", "what time is it"] or user_text in ["时间", "现在几点"]:
-        reply = f"The current time is {datetime.datetime.now().strftime('%H:%M:%S')}." if detected_lang=="en" else f"当前时间是 {datetime.datetime.now().strftime('%H:%M:%S')}。"
-        confidence = 1.0
-    else:
-        # Check course intents first
-        course_name, intent_type = check_course_intent(user_text)
-        if course_name:
-            reply = get_course_reply(course_name, intent_type)
+    reply = ""
+    confidence = 0.0
+
+    # Handle pending course clarification
+    if st.session_state.pending_course_clarify:
+        if user_text.lower() in ["yes", "y", "是", "对"]:
+            course_name = st.session_state.pending_course_clarify
+            reply = get_course_reply(course_name, "curriculum")
             confidence = 1.0
         else:
-            # fallback to CSV FAQ
-            reply, confidence, _ = get_csv_response(user_text, detected_lang)
+            reply = "Okay, please specify your question again."
+            confidence = 0.5
+        st.session_state.pending_course_clarify = None
+    else:
+        # Greetings
+        greetings_en = ["hi", "hello", "hey"]
+        greetings_zh = ["你好", "嗨"]
+        if user_text.lower() in greetings_en or user_text in greetings_zh:
+            reply = "Hello! How can I help you?" if detected_lang=="en" else "您好！我能帮您什么吗？"
+            confidence = 1.0
+        elif user_text.lower() in ["time", "what time is it"] or user_text in ["时间", "现在几点"]:
+            reply = f"The current time is {datetime.datetime.now().strftime('%H:%M:%S')}." if detected_lang=="en" else f"当前时间是 {datetime.datetime.now().strftime('%H:%M:%S')}。"
+            confidence = 1.0
+        else:
+            # Check course intents
+            course_name, intent_type = check_course_intent(user_text)
+            if course_name:
+                if intent_type == "clarify":
+                    reply = f"Do you mean the '{course_name.title()}' course?"
+                    confidence = 1.0
+                    st.session_state.pending_course_clarify = course_name
+                else:
+                    reply = get_course_reply(course_name, intent_type)
+                    confidence = 1.0
+            else:
+                reply, confidence, _ = get_csv_response(user_text, detected_lang)
 
-    # Save conversation
     st.session_state.history.append(("You", user_text))
     st.session_state.history.append(("Bot", reply))
     log_interaction(user_text, detected_lang, user_text, reply, confidence)
@@ -340,14 +357,23 @@ st.markdown("""
 
 tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
 with tab1:
+    # Quick FAQ buttons
     st.subheader("Quick Questions")
-    faq_options = ["Admissions", "Tuition", "Exams", "Library", "Housing", "Office Hours"]
+    faq_options = [
+        "Admissions", 
+        "Tuition", 
+        "Exams", 
+        "Library", 
+        "Housing", 
+        "Office Hours"
+    ]
     cols = st.columns(len(faq_options))
     for i, option in enumerate(faq_options):
         if cols[i].button(option):
             st.session_state.input = option
             bot_reply(option)
 
+    # Chat history
     chat_html = '<div class="chat-container" id="chat-box">'
     for speaker, msg in st.session_state.history:
         bubble_class = "user-bubble" if speaker=="You" else "bot-bubble"
@@ -356,7 +382,8 @@ with tab1:
     chat_html += "<script>var chatBox=document.getElementById('chat-box');if(chatBox){chatBox.scrollTop=chatBox.scrollHeight;}</script>"
     st.markdown(chat_html, unsafe_allow_html=True)
 
+    # User input
     st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
-    
+
 with tab2:
     show_analytics()
