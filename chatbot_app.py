@@ -85,14 +85,14 @@ def get_csv_response(user_input, detected_lang="en"):
     }
 
     try:
-        # Step 1: Translate user input to English if it's Chinese
+        # 1. Translate user input to English if Chinese
         translated_input = user_input
         if detected_lang == "zh-CN":
             translated_input = GoogleTranslator(source="zh-CN", target="en").translate(user_input)
 
-        # Step 2: Fuzzy match in English CSV
+        # 2. Fuzzy match in English CSV
         questions = knowledge_base["question"].tolist()
-        matches = find_best_matches(translated_input, questions, threshold=0.4)
+        matches = find_best_matches(translated_input, questions, threshold=0.3)  # lowered threshold
 
         if matches:
             matched_q = matches[0][0]
@@ -103,7 +103,7 @@ def get_csv_response(user_input, detected_lang="en"):
             response = fallback_response[detected_lang]
             confidence = 0.0
 
-        # Step 3: Translate back to Chinese if needed
+        # 3. Translate back to Chinese if needed
         if detected_lang == "zh-CN" and response != fallback_response["zh-CN"]:
             response = GoogleTranslator(source="en", target="zh-CN").translate(response)
 
