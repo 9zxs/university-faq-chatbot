@@ -481,7 +481,7 @@ def show_enhanced_analytics():
         
         with col2:
             st.subheader("Confidence Score Distribution")
-            fig = px.histogram(df_logs, x='confidence', nbins=20,
+            fig = px.histogram(df_logs, x='confidence', bins=20,
                              title="Response Confidence Scores")
             st.plotly_chart(fig, use_container_width=True)
         
