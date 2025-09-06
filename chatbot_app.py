@@ -191,7 +191,14 @@ def get_course_reply(course_name, intent_type):
     if not course_info:
         return "Sorry, course information is not available yet."
     if intent_type == "curriculum":
-        return course_info["curriculum"]
+        # Format curriculum dictionary/list into readable string
+        curriculum_text = ""
+        semesters = course_info["curriculum"]
+        if isinstance(semesters, str):
+            return semesters  # Already a formatted string
+        for sem, subjects in semesters.items():
+            curriculum_text += f"{sem}: {', '.join(subjects)}.\n"
+        return curriculum_text.strip()
     elif intent_type == "description":
         return course_info["description"]
     else:
