@@ -35,53 +35,64 @@ def load_knowledge_base():
 knowledge_base = load_knowledge_base()
 
 # =============================
-# Program/course responses
+# Course information dataset
 # =============================
-PROGRAM_RESPONSES = {
-    "computer science": "Computer Science Program:\n"
-                        "Semester 1: Introduction to Programming, Mathematics for Computing, Computer Systems Fundamentals, Communication Skills.\n"
-                        "Semester 2: Data Structures, Object-Oriented Programming, Discrete Mathematics, Digital Logic Design.\n"
-                        "Semester 3: Algorithms, Database Systems, Web Development, Operating Systems Fundamentals.\n"
-                        "Semester 4: Software Engineering, Computer Networks, Human-Computer Interaction, Probability & Statistics.\n"
-                        "Semester 5: Artificial Intelligence, Mobile App Development, Cybersecurity Basics, Elective Module 1.\n"
-                        "Semester 6: Machine Learning, Cloud Computing, Elective Module 2, Project I.\n"
-                        "Semester 7: Advanced AI, Data Analytics, Elective Module 3, Project II.\n"
-                        "Semester 8: Capstone Project, Internship, Industry Seminars, Elective Module 4.",
-    "engineering": "Engineering Program:\n"
-                   "Semester 1: Mathematics I, Physics I, Introduction to Engineering, Engineering Drawing.\n"
-                   "Semester 2: Mathematics II, Physics II, Mechanics, Electrical Fundamentals.\n"
-                   "Semester 3: Thermodynamics, Materials Science, Circuit Analysis, Programming for Engineers.\n"
-                   "Semester 4: Fluid Mechanics, Electronics, Control Systems, Technical Communication.\n"
-                   "Semester 5: Mechanical Design, Embedded Systems, Environmental Engineering, Elective Module 1.\n"
-                   "Semester 6: Power Systems, Robotics, Instrumentation, Elective Module 2.\n"
-                   "Semester 7: Project Design, Industrial Training, Elective Module 3.\n"
-                   "Semester 8: Capstone Project, Professional Ethics, Industry Seminars.",
-    "business": "Business Administration Program:\n"
-                "Semester 1: Introduction to Business, Principles of Economics, Business Communication, IT for Business.\n"
-                "Semester 2: Financial Accounting, Microeconomics, Marketing Principles, Business Mathematics.\n"
-                "Semester 3: Managerial Accounting, Organizational Behavior, Business Law, Statistics for Business.\n"
-                "Semester 4: Operations Management, Macroeconomics, Human Resource Management, Elective Module 1.\n"
-                "Semester 5: Strategic Management, International Business, Entrepreneurship, Elective Module 2.\n"
-                "Semester 6: Finance Management, Marketing Management, Business Ethics, Elective Module 3.\n"
-                "Semester 7: Project Management, Internship, Elective Module 4.\n"
-                "Semester 8: Capstone Project, Industry Seminars, Leadership Development.",
-    "information technology": "Information Technology Program:\n"
-                              "Semester 1: Introduction to IT, Programming Fundamentals, Web Fundamentals, Digital Literacy.\n"
-                              "Semester 2: Data Structures, Computer Networks, Database Fundamentals, Object-Oriented Programming.\n"
-                              "Semester 3: Web Development, Mobile App Development, System Administration, Probability & Statistics.\n"
-                              "Semester 4: Cloud Computing, Cybersecurity Basics, Software Engineering, Elective Module 1.\n"
-                              "Semester 5: Artificial Intelligence, Machine Learning, Elective Module 2, Project I.\n"
-                              "Semester 6: Advanced Networking, Database Administration, Elective Module 3, Project II.\n"
-                              "Semester 7: Capstone Project, Internship, Industry Seminars, Elective Module 4.",
-    "nursing": "Nursing Program:\n"
-               "Semester 1: Anatomy & Physiology, Introduction to Nursing, Health Communication, Fundamentals of Care.\n"
-               "Semester 2: Pathophysiology, Pharmacology, Patient Care, Clinical Skills I.\n"
-               "Semester 3: Medical-Surgical Nursing I, Community Health, Psychology, Clinical Skills II.\n"
-               "Semester 4: Medical-Surgical Nursing II, Pediatric Nursing, Research Methods, Clinical Skills III.\n"
-               "Semester 5: Psychiatric Nursing, Obstetrics & Gynecology, Leadership & Management, Clinical Skills IV.\n"
-               "Semester 6: Advanced Nursing Practices, Evidence-Based Practice, Elective Module 1, Internship I.\n"
-               "Semester 7: Capstone Project, Internship II, Health Policy, Elective Module 2.\n"
-               "Semester 8: Professional Development, Clinical Seminar, Elective Module 3."
+COURSES_INFO = {
+    "computer science": {
+        "description": "Computer Science prepares students to design, develop, and analyze software systems. Aims include problem-solving, programming skills, and understanding computing theory.",
+        "curriculum": {
+            "Semester 1": ["Introduction to Programming", "Mathematics for Computing", "Computer Systems Fundamentals", "Communication Skills"],
+            "Semester 2": ["Data Structures", "Object-Oriented Programming", "Discrete Mathematics", "Digital Logic Design"],
+            "Semester 3": ["Algorithms", "Database Systems", "Web Development", "Operating Systems Fundamentals"],
+            "Semester 4": ["Software Engineering", "Computer Networks", "Human-Computer Interaction", "Probability & Statistics"],
+            "Semester 5": ["Artificial Intelligence", "Mobile App Development", "Cybersecurity Basics", "Elective Module 1"],
+            "Semester 6": ["Machine Learning", "Cloud Computing", "Elective Module 2", "Project I"],
+            "Semester 7": ["Advanced AI", "Data Analytics", "Elective Module 3", "Project II"],
+            "Semester 8": ["Capstone Project", "Internship", "Industry Seminars", "Elective Module 4"],
+        },
+        "keywords": ["computer", "cs", "programming", "software"]
+    },
+    "information technology": {
+        "description": "Information Technology focuses on applying technology to solve business and organizational problems. Aims include networking, software applications, and IT project management.",
+        "curriculum": {
+            "Semester 1": ["IT Fundamentals", "Mathematics for IT", "Computer Systems", "Communication Skills"],
+            "Semester 2": ["Networking Basics", "Database Fundamentals", "Web Technologies", "Programming Fundamentals"],
+            "Semester 3": ["Systems Analysis", "Software Development", "IT Security", "Operating Systems"],
+            "Semester 4": ["Cloud Computing", "IT Project Management", "Data Analytics", "Elective 1"],
+            "Semester 5": ["Network Administration", "IT Strategy", "Elective 2", "Capstone Project Preparation"]
+        },
+        "keywords": ["it", "information technology", "networking", "software"]
+    },
+    "business": {
+        "description": "Business studies prepare students for careers in management, marketing, finance, and entrepreneurship. Aims include analytical thinking, business strategy, and leadership skills.",
+        "curriculum": {
+            "Semester 1": ["Principles of Management", "Microeconomics", "Business Communication", "Accounting Basics"],
+            "Semester 2": ["Macroeconomics", "Marketing Fundamentals", "Business Law", "Statistics for Business"],
+            "Semester 3": ["Organizational Behavior", "Financial Management", "Operations Management", "Elective 1"],
+            "Semester 4": ["Strategic Management", "Human Resource Management", "Elective 2", "Internship Preparation"]
+        },
+        "keywords": ["business", "management", "marketing", "finance"]
+    },
+    "engineering": {
+        "description": "Engineering programs develop problem-solving, design, and technical skills across various fields such as mechanical, electrical, or civil engineering.",
+        "curriculum": {
+            "Semester 1": ["Engineering Mathematics", "Physics for Engineers", "Introduction to Engineering", "Communication Skills"],
+            "Semester 2": ["Mechanics", "Electrical Circuits", "Material Science", "Programming Fundamentals"],
+            "Semester 3": ["Thermodynamics", "Fluid Mechanics", "Electronics", "Elective 1"],
+            "Semester 4": ["Control Systems", "Instrumentation", "Project 1", "Elective 2"]
+        },
+        "keywords": ["engineering", "mechanical", "civil", "electrical"]
+    },
+    "nursing": {
+        "description": "Nursing programs prepare students to provide healthcare, patient care, and clinical support. Aims include patient safety, clinical skills, and health assessment.",
+        "curriculum": {
+            "Semester 1": ["Introduction to Nursing", "Anatomy & Physiology", "Health Communication", "Biology Basics"],
+            "Semester 2": ["Medical-Surgical Nursing", "Pharmacology", "Pathophysiology", "Patient Care Skills"],
+            "Semester 3": ["Community Health Nursing", "Pediatric Nursing", "Clinical Practicum 1", "Elective 1"],
+            "Semester 4": ["Mental Health Nursing", "Obstetrics Nursing", "Clinical Practicum 2", "Elective 2"]
+        },
+        "keywords": ["nursing", "healthcare", "clinical", "patient"]
+    }
 }
 
 # =============================
@@ -115,9 +126,6 @@ def log_interaction(user_text, detected_lang, translated_input, bot_reply, confi
     with open(LOG_PATH, "w", encoding="utf-8") as f:
         json.dump(logs, f, indent=2)
 
-# =============================
-# Fuzzy matching
-# =============================
 def find_best_matches(user_input, questions, threshold=0.4):
     user_input_lower = user_input.lower()
     matches = []
@@ -128,28 +136,53 @@ def find_best_matches(user_input, questions, threshold=0.4):
     matches.sort(key=lambda x: x[1], reverse=True)
     return matches
 
+# =============================
+# Course-specific logic
+# =============================
+def check_course_intent(user_input):
+    """
+    Returns (course_name, intent_type) if matched
+    intent_type: "description" or "curriculum" or "clarify"
+    """
+    input_lower = user_input.lower()
+    for course, info in COURSES_INFO.items():
+        # If user explicitly asks "what is" or "aim" etc
+        if any(kw in input_lower for kw in info['keywords']):
+            if any(word in input_lower for word in ["what is", "aim", "goal", "describe", "objective"]):
+                return course, "description"
+            elif any(word in input_lower for word in ["learn", "study", "curriculum", "module", "semester"]):
+                return course, "curriculum"
+            elif input_lower.strip() in info['keywords']:
+                return course, "clarify"
+    return None, None
+
+def get_course_reply(course_name, intent_type):
+    if intent_type == "description":
+        return COURSES_INFO[course_name]["description"]
+    elif intent_type == "curriculum":
+        curriculum = COURSES_INFO[course_name]["curriculum"]
+        reply = f"{course_name.title()} Program Curriculum:\n"
+        for sem, subjects in curriculum.items():
+            reply += f"{sem}: {', '.join(subjects)}\n"
+        return reply.strip()
+    elif intent_type == "clarify":
+        return f"Do you mean the '{course_name.title()}' course?"
+    return None
+
+# =============================
+# CSV FAQ response
+# =============================
 def get_csv_response(user_input, detected_lang="en"):
     fallback_response = {
         "en": "Sorry, I don’t know that yet. Please contact the admin office.",
         "zh-CN": "抱歉，我还不知道。请联系管理办公室。"
     }
-
     try:
         translated_input = user_input
         if detected_lang == "zh-CN":
             translated_input = GoogleTranslator(source="zh-CN", target="en").translate(user_input)
-
-        # --- Check if input is a known program/course ---
-        for prog in PROGRAM_RESPONSES:
-            if prog in translated_input.lower():
-                response = PROGRAM_RESPONSES[prog]
-                confidence = 1.0
-                return response, confidence, translated_input
-
-        # --- Fuzzy match in CSV ---
         questions = knowledge_base["question"].tolist()
         matches = find_best_matches(translated_input, questions, threshold=0.3)
-
         if matches:
             matched_q = matches[0][0]
             answer = knowledge_base.loc[knowledge_base["question"].str.lower() == matched_q.lower(), "answer"].values[0]
@@ -158,12 +191,9 @@ def get_csv_response(user_input, detected_lang="en"):
         else:
             response = fallback_response[detected_lang]
             confidence = 0.0
-
         if detected_lang == "zh-CN" and response != fallback_response["zh-CN"]:
             response = GoogleTranslator(source="en", target="zh-CN").translate(response)
-
         return response, confidence, translated_input
-
     except Exception as e:
         print("Error in get_csv_response:", e)
         return fallback_response[detected_lang], 0.0, user_input
@@ -187,17 +217,27 @@ def bot_reply(user_text):
     except:
         detected_lang = "en"
 
+    # Greetings
     greetings_en = ["hi", "hello", "hey"]
     greetings_zh = ["你好", "嗨"]
     if user_text.lower() in greetings_en or user_text in greetings_zh:
         reply = "Hello! How can I help you?" if detected_lang=="en" else "您好！我能帮您什么吗？"
         confidence = 1.0
+    # Explicit time query
     elif user_text.lower() in ["time", "what time is it"] or user_text in ["时间", "现在几点"]:
         reply = f"The current time is {datetime.datetime.now().strftime('%H:%M:%S')}." if detected_lang=="en" else f"当前时间是 {datetime.datetime.now().strftime('%H:%M:%S')}。"
         confidence = 1.0
     else:
-        reply, confidence, _ = get_csv_response(user_text, detected_lang)
+        # Check course intents first
+        course_name, intent_type = check_course_intent(user_text)
+        if course_name:
+            reply = get_course_reply(course_name, intent_type)
+            confidence = 1.0
+        else:
+            # fallback to CSV FAQ
+            reply, confidence, _ = get_csv_response(user_text, detected_lang)
 
+    # Save conversation
     st.session_state.history.append(("You", user_text))
     st.session_state.history.append(("Bot", reply))
     log_interaction(user_text, detected_lang, user_text, reply, confidence)
