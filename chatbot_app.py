@@ -4,8 +4,8 @@ from pathlib import Path
 from deep_translator import GoogleTranslator
 from langdetect import detect
 import pandas as pd
-import plotly.express as px
 from difflib import SequenceMatcher
+import plotly.express as px
 
 # =============================
 # File paths
@@ -20,7 +20,6 @@ FEEDBACK_PATH = BASE_DIR / "data" / "feedback.json"
 # =============================
 SUPPORTED_LANGS = {
     "en": "en",
-    "ms": "ms",
     "zh-cn": "zh-CN"
 }
 
@@ -30,7 +29,6 @@ SUPPORTED_LANGS = {
 @st.cache_resource
 def load_knowledge_base():
     df = pd.read_csv(KB_PATH)
-    # Normalize questions
     df["question"] = df["question"].str.strip().str.lower()
     return df
 
@@ -43,10 +41,10 @@ def translate_text(text, target_lang):
     try:
         if target_lang == "en":
             return text
-        if target_lang in ["ms", "zh-CN"]:
-            return GoogleTranslator(source="en", target=target_lang).translate(text)
+        if target_lang == "zh-CN":
+            return GoogleTranslator(source="en", target="zh-CN").translate(text)
         return text
-    except Exception:
+    except:
         return text
 
 def log_interaction(user_text, detected_lang, translated_input, bot_reply, confidence):
@@ -68,42 +66,37 @@ def log_interaction(user_text, detected_lang, translated_input, bot_reply, confi
         json.dump(logs, f, indent=2)
 
 # =============================
-# Response Matching
+# Fuzzy matching
 # =============================
 def find_best_matches(user_input, questions, threshold=0.4):
-    """Return list of questions from KB that match user_input above threshold."""
     user_input_lower = user_input.lower()
     matches = []
     for q in questions:
         ratio = SequenceMatcher(None, user_input_lower, q).ratio()
         if ratio >= threshold:
             matches.append((q, ratio))
-    # Sort by highest similarity first
     matches.sort(key=lambda x: x[1], reverse=True)
     return matches
 
 def get_csv_response(user_input, detected_lang="en"):
-    fallback_response = "Sorry, I don’t know that yet. Please contact the admin office."
+    fallback_response = "Sorry, I don’t know that yet. Please contact the admin office." if detected_lang=="en" else "抱歉，我还不知道。请联系管理办公室。"
     try:
-        # Translate input to English for matching
+        # Translate to English for matching
         translated_input = user_input
         if detected_lang != "en":
             translated_input = GoogleTranslator(source=detected_lang, target="en").translate(user_input)
 
         questions = knowledge_base["question"].tolist()
-
         matches = find_best_matches(translated_input, questions, threshold=0.4)
 
         if matches:
-            # Collect all unique matching answers
-            answers = set()  # Use set to remove duplicates
+            answers = set()  # deduplicate
             for matched_q, ratio in matches:
                 mask = knowledge_base["question"].str.contains(matched_q, case=False)
                 if mask.any():
-                    answer = knowledge_base.loc[mask, "answer"].values[0]
-                    answers.add(answer)  # add to set (no duplicates)
+                    answers.add(knowledge_base.loc[mask, "answer"].values[0])
             if answers:
-                response = " | ".join(answers)  # Combine multiple answers
+                response = "\n• " + "\n• ".join(answers)  # bullet points
             else:
                 response = fallback_response
             confidence = matches[0][1]
@@ -111,7 +104,6 @@ def get_csv_response(user_input, detected_lang="en"):
             response = fallback_response
             confidence = 0.0
 
-        # Translate back to user language if needed
         response = translate_text(response, detected_lang)
         return response, confidence, translated_input
 
@@ -128,7 +120,7 @@ if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())[:8]
 
 # =============================
-# Bot reply logic
+# Bot reply
 # =============================
 def bot_reply(user_text):
     detected_lang = "en"
@@ -139,21 +131,19 @@ def bot_reply(user_text):
     except:
         detected_lang = "en"
 
-    # Handle greetings
-    greetings = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"]
-    if user_text.lower() in greetings:
-        reply = random.choice(["Hello! How can I help you?", "Hi there! What would you like to know?"])
+    # Greetings
+    greetings_en = ["hi", "hello", "hey"]
+    greetings_zh = ["你好", "嗨"]
+    if user_text.lower() in greetings_en or user_text in greetings_zh:
+        reply = "Hello! How can I help you?" if detected_lang=="en" else "您好！我能帮您什么吗？"
         confidence = 1.0
-        translated_input = user_text
-    # Handle dynamic time query
-    elif "time" in user_text.lower():
-        reply = f"The current time is {datetime.datetime.now().strftime('%H:%M:%S')}."
+    # Time query
+    elif "time" in user_text.lower() or "时间" in user_text:
+        reply = f"The current time is {datetime.datetime.now().strftime('%H:%M:%S')}." if detected_lang=="en" else f"当前时间是 {datetime.datetime.now().strftime('%H:%M:%S')}。"
         confidence = 1.0
-        translated_input = user_text
     else:
         reply, confidence, translated_input = get_csv_response(user_text, detected_lang)
 
-    # Save to history and log
     st.session_state.history.append(("You", user_text))
     st.session_state.history.append(("Bot", reply))
     log_interaction(user_text, detected_lang, translated_input, reply, confidence)
@@ -177,7 +167,7 @@ def save_feedback(rating, comment=""):
         })
         with open(FEEDBACK_PATH, "w", encoding="utf-8") as f:
             json.dump(feedback_data, f, indent=2)
-        st.success("Thank you for your feedback! 🙏")
+        st.success("Thank you for your feedback! 🙏" if "en" else "感谢您的反馈！🙏")
     except Exception as e:
         st.error(f"Error saving feedback: {e}")
 
@@ -227,14 +217,14 @@ def show_analytics():
 # App UI
 # =============================
 st.set_page_config(page_title="🎓 University FAQ Chatbot", page_icon="🤖", layout="wide")
-logo_path = Path(__file__).resolve().parent / "data" / "university_logo.png"
+logo_path = BASE_DIR / "data" / "university_logo.png"
 col1, col2 = st.columns([1,4])
 with col1:
     if logo_path.exists():
         st.image(str(logo_path), width=80)
 with col2:
     st.title("🎓 University FAQ Chatbot")
-    st.caption("Multilingual support: English • 中文 • Malay")
+    st.caption("Multilingual support: English • 中文")
 
 with st.sidebar:
     st.subheader("ℹ️ Info")
@@ -245,50 +235,23 @@ with st.sidebar:
     if st.button("🗑️ Clear Chat"):
         st.session_state.history = []
 
-# CSS styling
 st.markdown("""
-    <style>
-        .chat-container {
-            display: flex;
-            flex-direction: column;
-            height: 300px;          
-            overflow-y: auto;       
-            border: 1px solid #ddd;
-            padding: 10px;
-            border-radius: 10px;
-        }
-        .user-bubble, .bot-bubble {
-            padding: 10px;
-            border-radius: 10px;
-            margin: 5px;
-            max-width: 70%;
-            word-wrap: break-word;
-        }
-        @media (prefers-color-scheme: light) {
-            .user-bubble { background-color: #DCF8C6; color: #000; align-self: flex-end; }
-            .bot-bubble { background-color: #F1F0F0; color: #000; align-self: flex-start; }
-        }
-        @media (prefers-color-scheme: dark) {
-            .user-bubble { background-color: #4A8B4E; color: #fff; align-self: flex-end; }
-            .bot-bubble { background-color: #3A3A3A; color: #fff; align-self: flex-start; }
-        }
-    </style>
+<style>
+.chat-container { display: flex; flex-direction: column; height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 10px;}
+.user-bubble, .bot-bubble { padding: 10px; border-radius: 10px; margin: 5px; max-width: 70%; word-wrap: break-word; }
+@media (prefers-color-scheme: light) { .user-bubble { background-color: #DCF8C6; color: #000; align-self: flex-end; } .bot-bubble { background-color: #F1F0F0; color: #000; align-self: flex-start; } }
+@media (prefers-color-scheme: dark) { .user-bubble { background-color: #4A8B4E; color: #fff; align-self: flex-end; } .bot-bubble { background-color: #3A3A3A; color: #fff; align-self: flex-start; } }
+</style>
 """, unsafe_allow_html=True)
 
-# Chat and Analytics Tabs
 tab1, tab2 = st.tabs(["💬 Chat", "📊 Analytics"])
 with tab1:
     chat_html = '<div class="chat-container" id="chat-box">'
     for speaker, msg in st.session_state.history:
-        bubble_class = "user-bubble" if speaker == "You" else "bot-bubble"
+        bubble_class = "user-bubble" if speaker=="You" else "bot-bubble"
         chat_html += f'<div class="{bubble_class}">{speaker}: {msg}</div>'
     chat_html += '</div>'
-    chat_html += """
-        <script>
-            var chatBox = document.getElementById('chat-box');
-            if (chatBox) { chatBox.scrollTop = chatBox.scrollHeight; }
-        </script>
-    """
+    chat_html += "<script>var chatBox=document.getElementById('chat-box');if(chatBox){chatBox.scrollTop=chatBox.scrollHeight;}</script>"
     st.markdown(chat_html, unsafe_allow_html=True)
     st.text_input("Ask me anything...", key="input", on_change=lambda: bot_reply(st.session_state.input))
 
