@@ -11,7 +11,7 @@ from difflib import get_close_matches
 # File paths
 # =============================
 BASE_DIR = Path(__file__).resolve().parent
-KB_PATH = BASE_DIR / "data" / "knowledge_base.csv"
+KB_PATH = BASE_DIR / "data" / "university_faq_dataset.csv"
 LOG_PATH = BASE_DIR / "data" / "chat_logs.json"
 FEEDBACK_PATH = BASE_DIR / "data" / "feedback.json"
 
