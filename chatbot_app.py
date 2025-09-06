@@ -5,6 +5,8 @@ from deep_translator import GoogleTranslator
 from langdetect import detect
 import pandas as pd
 import plotly.express as px
+import io
+from openpyxl import Workbook
 
 # =============================
 # File paths
@@ -178,14 +180,17 @@ def show_analytics():
         if not logs:
             st.warning("No conversation data available yet.")
             return
+
         df = pd.DataFrame(logs)
 
+        # ==== Stats ====
         col1, col2, col3, col4 = st.columns(4)
         with col1: st.metric("Total Conversations", len(df))
         with col2: st.metric("Unique Sessions", df['session_id'].nunique() if 'session_id' in df else "N/A")
         with col3: st.metric("Avg Confidence", f"{df['confidence'].mean():.2f}" if 'confidence' in df else "0")
         with col4: st.metric("Languages Used", df['detected_lang'].nunique() if 'detected_lang' in df else "N/A")
 
+        # ==== Charts ====
         col1, col2 = st.columns(2)
         with col1:
             if 'predicted_tag' in df:
@@ -199,11 +204,25 @@ def show_analytics():
                 fig = px.pie(values=lang_counts.values, names=lang_counts.index, title="Language Usage")
                 st.plotly_chart(fig, use_container_width=True)
 
+        # ==== Recent conversations ====
         st.subheader("Recent Conversations")
         recent_df = df.tail(10)[['timestamp', 'user_text', 'predicted_tag', 'confidence']].copy()
         if 'confidence' in recent_df:
             recent_df['confidence'] = recent_df['confidence'].round(2)
         st.dataframe(recent_df, use_container_width=True)
+
+        # ==== Export button ====
+        st.subheader("📂 Export Logs")
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="ChatLogs")
+        st.download_button(
+            label="⬇️ Download Excel",
+            data=output.getvalue(),
+            file_name="chat_logs.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
     except Exception as e:
         st.error(f"Error loading analytics: {e}")
 
