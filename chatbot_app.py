@@ -737,40 +737,45 @@ def display_chat():
     st.markdown(chat_html, unsafe_allow_html=True)
 
 def process_user_input(user_input):
-    """Process user input and generate response"""
+    """Process user input and generate response - Fixed loops"""
     try:
         if not user_input.strip() or st.session_state.processing:
             return
-        
+            
+        # Set processing flag to prevent loops
         st.session_state.processing = True
         
-        # Use sidebar selected language
-        selected_lang = st.session_state.user_language
+        # Detect language
+        detected_lang = safe_detect_language(user_input)
         
         # Generate response
-        response, confidence, translated_input, intent = get_enhanced_response(
-            user_input, detected_lang=selected_lang
-        )
+        response, confidence, translated_input, intent = get_enhanced_response(user_input, detected_lang)
         
-        # Update chat history
+        # Add to conversation history
         st.session_state.history.append(("You", user_input))
         st.session_state.history.append(("Bot", response))
         
-        # Update context
+        # Update conversation context
         st.session_state.conversation_context.append({
             "user_input": user_input,
             "intent": intent,
             "confidence": confidence
         })
         
+        # Keep only last 10 context items
         if len(st.session_state.conversation_context) > 10:
             st.session_state.conversation_context = st.session_state.conversation_context[-10:]
         
         # Log interaction
-        log_interaction(user_input, selected_lang, translated_input, response, confidence, intent)
+        log_interaction(user_input, detected_lang, translated_input, response, confidence, intent)
         
+        # Clear processing flag
         st.session_state.processing = False
+        
+        # Clear the input box
         st.session_state.chat_input = ""
+        
+        # Rerun to update display
         st.rerun()
         
     except Exception as e:
